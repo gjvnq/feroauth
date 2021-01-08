@@ -10,6 +10,7 @@ use rocket_contrib::templates::Template;
 
 #[derive(Serialize)]
 struct BasicCtx {
+    disable_vue: bool,
     page_title: String,
     page_desc: Option<String>
 }
@@ -21,7 +22,7 @@ fn index() -> &'static str {
 
 #[get("/login")]
 fn login() -> Template {
-    let context = BasicCtx { page_title: "abc".to_string(), page_desc: Some("dsds".to_string()) };
+    let context = BasicCtx { disable_vue: true, page_title: "abc".to_string(), page_desc: Some("dsds".to_string()) };
     Template::render("login", &context)
 }
 
