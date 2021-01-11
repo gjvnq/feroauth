@@ -1,13 +1,15 @@
 [package]
 name = "ferrocene"
 version = "0.1.0"
-authors = ["Gabriel Villela Noriega de Queiroz <gabrieljvnq@gmail.com>"]
+authors = ["G. Queiroz <gabrieljvnq@gmail.com>"]
 edition = "2018"
+categories = ["authentication", "web-programming"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 rocket = "0.4.6"
+tera = "1"
 fern = { version = "0.6.0", features = ["colored"] }
 log = "0.4.11"
 serde = { version = "1.0.117", features = ["derive"] }
@@ -15,3 +17,8 @@ serde_json = "1.0"
 toml = "0.5"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+[dependencies.rocket_contrib]
+version = "0.4.6"
+default-features = false
+features = ["json", "uuid", "serve", "helmet", "tera_templates"]

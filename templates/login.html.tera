@@ -1,0 +1,46 @@
+{% extends "_base" %}
+{% block head %}
+    <style type="text/css">
+        .important { color: #336699; }
+    </style>
+{% endblock head %}
+{% block content %}
+    <h1>Index</h1>
+    <p class="important">
+      Welcome to my awesome homepage.
+    </p>
+    <div class="container">
+  <div class="row">
+    <div class="col-sm">
+      One of three columns
+    </div>
+    <div class="col-sm">
+      One of three columns
+    </div>
+    <div class="col-sm">
+      One of three columns
+    </div>
+  </div>
+</div>
+<figure>
+  <blockquote class="blockquote">
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
+  </blockquote>
+  <figcaption class="blockquote-footer">
+    Someone famous in <cite title="Source Title">Source Title</cite>
+  </figcaption>
+</figure>
+<div id="app">
+  {% raw %}{{ message }}{% endraw %}
+</div>
+<script>
+ window.addEventListener('load', () => {
+var app = new Vue({
+  el: '#app',
+  data: {
+    message: 'Hello Vue!'
+  }
+})
+});
+</script>
+{% endblock content %}
