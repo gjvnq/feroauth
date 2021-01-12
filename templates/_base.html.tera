@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{{ page_title }}</title>
-    {%- if page_desc %}
-    <meta name="description" content="{{ page_desc }}">
+    <title>{{ base.page_title }}</title>
+    {%- if base.page_desc %}
+    <meta name="description" content="{{ base.page_desc }}">
     {%- endif -%}
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link href="/static/css/bootstrap-icons.css" rel="preload" as="style">
+    <link href="/static/css/base.css" rel="stylesheet">
     <script defer src="/static/js/bootstrap.min.js"></script>
-    {%- if not disable_vue -%}
+    {%- if not base.disable_vue -%}
     <script async src="/static/js/vue.js"></script>
     <script defer src="/static/js/vuex.js"></script>
     {%- endif -%}

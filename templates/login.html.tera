@@ -1,38 +1,47 @@
 {% extends "_base" %}
 {% block head %}
-    <style type="text/css">
-        .important { color: #336699; }
+    <style>
+      body {
+        display: flex;
+        align-items: center;
+        padding-top: 40px;
+        padding-bottom: 40px;
+        background-color: #f5f5f5;
+      }
+      main#form-login {
+        width: 100%;
+        max-width: 300px;
+        margin: auto;
+      }
     </style>
 {% endblock head %}
 {% block content %}
-    <h1>Index</h1>
-    <p class="important">
-      Welcome to my awesome homepage.
-    </p>
-    <div class="container">
-  <div class="row">
-    <div class="col-sm">
-      One of three columns
-    </div>
-    <div class="col-sm">
-      One of three columns
-    </div>
-    <div class="col-sm">
-      One of three columns
-    </div>
-  </div>
-</div>
-<figure>
-  <blockquote class="blockquote">
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
-  </blockquote>
-  <figcaption class="blockquote-footer">
-    Someone famous in <cite title="Source Title">Source Title</cite>
-  </figcaption>
-</figure>
-<div id="app">
-  {% raw %}{{ message }}{% endraw %}
-</div>
+  <main id="form-login">
+    <form method="POST" action="/login">
+      <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57">
+      <h1 class="h3 mb-3 fw-normal">Log in</h1>
+      <div class="form-floating mb-3">
+        <input type="text" inputmode="email" class="form-control" id="username" name="username" autocomplete="username" placeholder="name@example.com" value="{{ username }}">
+        <label for="username">Email address or username</label>
+      </div>
+      <p><small>You may also the following as username: SSN, Passport Number</small></p>
+      {% if stage == "AskPassword" %}
+      <div class="form-floating mb-3">
+        <input type="password" class="form-control" id="password" name="password" placeholder="Password" autocomplete="current-password">
+        <label for="password">Password</label>
+      </div>
+      {% endif %}
+      {% if stage == "AskOTP" %}
+      <div class="form-floating mb-3">
+        <input type="text" inputmode="numeric" class="form-control" name="otp" id="otp" placeholder="OTP" autocomplete="one-time-code">
+        <label for="otp">2FA Code</label>
+      </div>
+      {% endif %}
+
+      <button class="w-100 btn btn-lg btn-primary" type="submit">Continue</button>
+      <p class="mt-5 mb-3 text-muted">&copy; 2017-2020</p>
+    </form>
+  </main>
 <script>
  window.addEventListener('load', () => {
 var app = new Vue({
