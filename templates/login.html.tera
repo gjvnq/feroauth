@@ -8,7 +8,7 @@
         padding-bottom: 40px;
         background-color: #f5f5f5;
       }
-      main#form-login {
+      main#login-form {
         width: 100%;
         max-width: 300px;
         margin: auto;
@@ -16,12 +16,12 @@
     </style>
 {% endblock head %}
 {% block content %}
-  <main id="form-login">
-    <form method="POST" action="/login">
+  <main id="login-form">
+    <form id="login-form-actual" method="POST" action="/login">
       <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57">
       <h1 class="h3 mb-3 fw-normal">Log in</h1>
       <div class="form-floating mb-3">
-        <input type="text" inputmode="email" class="form-control" id="username" name="username" autocomplete="username" placeholder="name@example.com" value="{{ username }}">
+        <input type="text" inputmode="email" class="form-control" id="username" name="username" autocomplete="username" placeholder="name@example.com" value="{{ username }}" {% if stage != "AskUsername" %}readonly{% endif %} required>
         <label for="username">Email address or username</label>
       </div>
       <p><small>You may also the following as username: SSN, Passport Number</small></p>
@@ -31,6 +31,7 @@
         <label for="password">Password</label>
       </div>
       {% endif %}
+      <input type="hidden" id="hashed_password" name="hashed_password" value="{{ hashed_password }}">
       {% if stage == "AskOTP" %}
       <div class="form-floating mb-3">
         <input type="text" inputmode="numeric" class="form-control" name="otp" id="otp" placeholder="OTP" autocomplete="one-time-code">
@@ -38,18 +39,46 @@
       </div>
       {% endif %}
 
-      <button class="w-100 btn btn-lg btn-primary" type="submit">Continue</button>
+      <button id="login-submit-btn" class="w-100 btn btn-lg btn-primary" type="submit">Continue</button>
       <p class="mt-5 mb-3 text-muted">&copy; 2017-2020</p>
     </form>
   </main>
 <script>
- window.addEventListener('load', () => {
-var app = new Vue({
-  el: '#app',
-  data: {
-    message: 'Hello Vue!'
-  }
-})
-});
+document.addEventListener('DOMContentLoaded', function() {
+	document.getElementById('password').addEventListener('change', resetHashedPassword);
+   document.getElementById('login-form-actual').addEventListener('submit', beforeSubmit);
+}, false);
+
+var hashingPassword = false;
+
+function resetHashedPassword() {
+	document.getElementById('hashed_password').value = '';
+}
+
+async function digestMessage(message) {
+	const msgUint8 = new TextEncoder().encode(message);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+	return hashHex;
+}
+
+function beforeSubmit(evt) {
+	let form = document.getElementById('login-form-actual');
+	let passwdElem = document.getElementById('password');
+	let hashedPasswdElem = document.getElementById('hashed_password');
+	passwdElem.readonly = true; // no user messing up stuff
+	if (!hashingPassword) {
+		hashingPassword = true;
+		digestMessage(passwdElem.value).then((res) => {
+			hashingPassword = false;
+			passwdElem.disabled = true; // this prevents the data from beign sent without risking messing with password managers
+			hashedPasswdElem.value = res;
+			form.submit();
+		});
+	}
+	return false;
+}
+
 </script>
 {% endblock content %}
