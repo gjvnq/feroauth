@@ -1,3 +1,4 @@
+.env
 *.bak
 config.toml
 Rocket.toml

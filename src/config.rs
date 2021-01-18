@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use std::fs;
 
-#[derive(Debug,Serialize,Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    db: String
+    pub db: String,
 }
 
 pub fn load_config() -> Config {

@@ -8,6 +8,8 @@ categories = ["authentication", "web-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "0.2.24", features = [ "full" ] }
+sqlx = { version = "0.4.2", features = [ "runtime-tokio-rustls", "mysql" ] }
 rocket = "0.4.6"
 tera = "1"
 fern = { version = "0.6.0", features = ["colored"] }
