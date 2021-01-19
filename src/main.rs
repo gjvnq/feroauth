@@ -1,22 +1,18 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 mod prelude;
-// mod user;
+mod user;
 mod config;
 
 #[macro_use]
 extern crate rocket;
-#[macro_use]
 extern crate rocket_contrib;
-// use crate::prelude::*;
 extern crate serde_json;
 
-use rocket::request::Form;
-use serde::{Deserialize, Serialize};
+use crate::prelude::*;
 
 use rocket_contrib::helmet::SpaceHelmet;
 use rocket_contrib::serve::StaticFiles;
-use rocket_contrib::templates::Template;
 
 use sqlx::mysql::MySqlPoolOptions;
 
@@ -64,8 +60,6 @@ struct LoginFormInput {
 
 #[get("/")]
 fn index() -> &'static str {
-    // use crate::schema::user::dsl::*;
-    // println!("{:?}", user.load::<crate::user::UserRaw>(&conn.0));
     "Hello, world!"
 }
 
@@ -126,11 +120,18 @@ async fn main() {
         .unwrap();
     println!("{:?}", pool);
     // Make a simple query to return the given parameter
-    let row: Result<(i64,), _> = sqlx::query_as("SELECT ?")
+    let row: Result<(i64,), _> = sqlx::query_as("SELECT ? ")
         .bind(150_i64)
         .fetch_one(&pool)
         .await;
     println!("{:?}", row);
+
+
+    let bytes = [4, 54, 67, 12, 43, 2, 98, 76, 32, 50, 87, 5, 1, 33, 43, 87];
+
+    let uuid = Uuid::from_slice(&bytes);
+    println!("{:?}", uuid);
+    println!("{:?}", user::User::load_by_uuid(uuid.unwrap(), &pool).await);
 
     let helmet = SpaceHelmet::default();
     rocket::ignite()
