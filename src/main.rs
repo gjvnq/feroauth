@@ -129,9 +129,11 @@ async fn main() {
 
     let bytes = [4, 54, 67, 12, 43, 2, 98, 76, 32, 50, 87, 5, 1, 33, 43, 87];
 
+    let mut tx = pool.begin().await.unwrap();
     let uuid = Uuid::from_slice(&bytes);
     println!("{:?}", uuid);
-    println!("{:?}", user::User::load_by_uuid(uuid.unwrap(), &pool).await);
+    println!("{:?}", user::User::load_by_uuid(uuid.unwrap(), &mut tx).await);
+    println!("{:?}", user::User::load_by_login_handle("\na@b.com \t", &mut tx).await);
 
     let helmet = SpaceHelmet::default();
     rocket::ignite()

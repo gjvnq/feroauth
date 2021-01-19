@@ -29,6 +29,7 @@ pub enum FError {
     // NoMoreResults,
 }
 
+pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
 pub type FResult<T> = Result<T, FError>;
 
 impl FError {

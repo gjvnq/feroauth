@@ -24,16 +24,20 @@ impl User {
         }
     }
 
-    pub async fn load_by_uuid(uuid: Uuid, pool: &MySqlPool) -> FResult<User> {
+    pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {
         let uuid = uuid.to_string();
+        User::load_by_uuid_str(&uuid, tx).await
+    }
+
+    pub async fn load_by_uuid_str(uuid: &str, tx: &mut Transaction<'_>) -> FResult<User> {
         println!("Loading user {:?}", uuid);
         let base_row = sqlx::query!("SELECT `uuid`, `display_name`, `auth_info` FROM `user` WHERE `uuid` = ?", uuid)
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await?;
         println!("{:?}", base_row);
 
         let handle_row = sqlx::query!("SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?", uuid)
-            .fetch_all(pool)
+            .fetch_all(&mut *tx)
             .await?;
         println!("{:?}", handle_row);
 
@@ -51,5 +55,13 @@ impl User {
             login_handles: handles,
             auth_info: base_row.auth_info
         })
+    }
+
+    pub async fn load_by_login_handle(login_handle: &str, tx: &mut Transaction<'_>) -> FResult<User> {
+        let login_handle = login_handle.trim();
+        let row = sqlx::query!("SELECT `user_uuid` FROM `login_handle` WHERE `login_handle` = ?", login_handle)
+            .fetch_one(&mut *tx)
+            .await?;
+        User::load_by_uuid_str(&row.user_uuid, tx).await
     }
 }
