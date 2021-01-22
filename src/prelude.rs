@@ -12,9 +12,11 @@ pub use serde::{Deserialize, Serialize};
 
 pub use rocket_contrib::templates::Template;
 
+pub use sqlx::mysql::MySqlPool;
 pub use sqlx::Error as SQLError;
 pub use sqlx::Result as SQLResult;
-pub use sqlx::mysql::MySqlPool;
+
+pub use crate::user::User;
 
 #[derive(Debug)]
 pub enum FError {

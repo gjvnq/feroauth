@@ -8,6 +8,7 @@ categories = ["authentication", "web-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+argon2rs = "0.2.5"
 tokio = { version = "0.2.24", features = [ "full" ] }
 sqlx = { version = "0.4.2", features = [ "runtime-tokio-rustls", "mysql", "uuid" ] }
 rocket = "0.4.6"
@@ -19,7 +20,6 @@ serde = { version = "1.0.117", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
-# sqlx = { version = "0.4.2", features = ["runtime-tokio-native-tls", "mysql", "macros", "chrono", "json"] }
 
 [dependencies.rocket_contrib]
 version = "0.4.6"
