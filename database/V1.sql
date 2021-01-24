@@ -137,7 +137,7 @@ CREATE INDEX `fk_kv_object_type1` ON `kv` (`uuid` ASC);
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `user` (
   `uuid` BINARY(16) NOT NULL,
-  `display_name` VARCHAR(190) NOT NULL,
+  `display_name` VARCHAR(30) NOT NULL,
   `added` DATETIME NOT NULL DEFAULT NOW(),
   `last_login` DATETIME NULL,
   PRIMARY KEY (`uuid`))

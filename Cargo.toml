@@ -10,7 +10,7 @@ categories = ["authentication", "web-programming"]
 [dependencies]
 argonautica = { version = "0.2", features = ["serde", "simd"] }
 tokio = { version = "0.2.24", features = [ "full" ] }
-sqlx = { version = "0.4.2", features = [ "runtime-tokio-rustls", "mysql", "uuid" ] }
+sqlx = { version = "0.4.2", features = [ "runtime-tokio-rustls", "mysql", "uuid", "chrono" ] }
 rocket = "0.4.6"
 tera = "1"
 fern = { version = "0.6.0", features = ["colored"] }

@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub enum OTP {
     TOTP(BaseOTP),
     HOTP(BaseOTP),
-    Recovery(RecoveryCodes)
+    Recovery(RecoveryCodes),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -13,15 +13,14 @@ pub struct BaseOTP {
     secret: Vec<u8>,
     digits: u8,
     alg: HashAlg,
-    name: String
+    name: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RecoveryCodes {
-	hash_alg: HashAlg,
-	unused: Vec<String>
-	// perhaps I should use the database instead of JSON...
-	// also, maybe I should encrypt the clear text codes so the user can still recover them?
+    hash_alg: HashAlg,
+    unused: Vec<String>, // perhaps I should use the database instead of JSON...
+                         // also, maybe I should encrypt the clear text codes so the user can still recover them?
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,14 +42,14 @@ pub struct Password {
 }
 
 impl Password {
-	fn base_verify(&self, _cleartext: &str) -> bool {
-		false
-	}
+    fn base_verify(&self, _cleartext: &str) -> bool {
+        false
+    }
 
     // the clear text can be pre hashed or not hashed at all
     pub fn verify(&self, cleartext: &str) -> bool {
         if self.base_verify(cleartext) {
-        	return true;
+            return true;
         }
         // pre hash because the browser might not have done it
         let cleartext = "";

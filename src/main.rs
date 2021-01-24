@@ -2,6 +2,7 @@
 
 mod auth;
 mod config;
+mod db;
 mod prelude;
 mod user;
 
@@ -14,8 +15,6 @@ use crate::prelude::*;
 
 use rocket_contrib::helmet::SpaceHelmet;
 use rocket_contrib::serve::StaticFiles;
-
-use sqlx::mysql::MySqlPoolOptions;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BasicCtx {
@@ -113,39 +112,21 @@ fn login_post(input: Form<LoginFormInput>) -> Template {
 
 #[tokio::main]
 async fn main() {
-    // let mut hasher = argonautica::Hasher::default();
-    // hasher.opt_out_of_secret_key(true);
-    // let hash = hasher
-    //     .with_password("admin")
-    //     .with_salt("saltsaltsalt")
-    //     .hash()
-    //     .unwrap();
-    // println!("{:?}", hash);
+    unsafe {
+        CONFIG = Some(config::load_config());
+        DB_POOL = Some(db::get_pool(get_config()).await);
+    }
 
-    let config = config::load_config();
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect(&config.db)
-        .await
-        .unwrap();
-    println!("{:?}", pool);
-    // Make a simple query to return the given parameter
-    let row: Result<(i64,), _> = sqlx::query_as("SELECT ? ")
-        .bind(150_i64)
-        .fetch_one(&pool)
-        .await;
-    println!("{:?}", row);
+    // let bytes = [4, 54, 67, 12, 43, 2, 98, 76, 32, 50, 87, 5, 1, 33, 43, 87];
 
-    let bytes = [4, 54, 67, 12, 43, 2, 98, 76, 32, 50, 87, 5, 1, 33, 43, 87];
-
-    let mut tx = pool.begin().await.unwrap();
-    let uuid = Uuid::from_slice(&bytes);
-    println!("{:?}", uuid);
-    println!("{:?}", User::load_by_uuid(uuid.unwrap(), &mut tx).await);
-    println!(
-        "{:?}",
-        User::load_by_login_handle("\na@b.com \t", &mut tx).await
-    );
+    // let mut tx = pool.begin().await.unwrap();
+    // let uuid = Uuid::from_slice(&bytes);
+    // println!("{:?}", uuid);
+    // println!(
+    //     "{:?}",
+    //     User::load_by_login_handle("\nadmin \t", &mut tx).await
+    // );
+    // println!("{:?}", User::load_by_uuid(uuid.unwrap(), &mut tx).await);
 
     let helmet = SpaceHelmet::default();
     rocket::ignite()

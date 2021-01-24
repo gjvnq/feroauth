@@ -1,3 +1,5 @@
+pub use crate::config::Config;
+
 pub use log::{debug, error, info, trace, warn};
 
 pub use std::io::Error as IOError;
@@ -14,9 +16,22 @@ pub use rocket_contrib::templates::Template;
 
 pub use sqlx::mysql::MySqlPool;
 pub use sqlx::Error as SQLError;
+pub use sqlx::Executor;
 pub use sqlx::Result as SQLResult;
 
+pub use chrono::{DateTime, TimeZone, Utc};
+
 pub use crate::user::User;
+
+pub const MIN_NON_EMPTY_STR: usize = 1;
+
+pub static mut DB_POOL: Option<sqlx::Pool<sqlx::MySql>> = None;
+pub static mut CONFIG: Option<Config> = None;
+
+#[derive(Debug)]
+pub enum InvalidValue {
+    OutOfRange(String, usize, usize), // field name, min, max
+}
 
 #[derive(Debug)]
 pub enum FError {
@@ -26,6 +41,7 @@ pub enum FError {
     // TimeConversionErrorFromSecs(u64),
     // FuseTypeParseError(String),
     // NodeNoNum,
+    InvalidValue(InvalidValue),
     UuidParseError(String),
     NotImplemented,
     // NoMoreResults,
@@ -59,9 +75,24 @@ impl std::convert::From<SQLError> for FError {
     }
 }
 
-pub fn parse_uuid(val: &str) -> FResult<Uuid> {
+pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     match Uuid::parse_str(&val) {
         Ok(v) => Ok(v),
         Err(_) => Err(FError::UuidParseError(val.to_string())),
     }
+}
+
+pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
+    match Uuid::from_slice(&val) {
+        Ok(v) => Ok(v),
+        Err(_) => Err(FError::UuidParseError(format!("{:?}", val))),
+    }
+}
+
+pub fn get_config() -> &'static Config {
+    unsafe { CONFIG.as_ref().unwrap() }
+}
+
+pub fn get_db_pool() -> &'static sqlx::Pool<sqlx::MySql> {
+    unsafe { DB_POOL.as_ref().unwrap() }
 }
