@@ -8,16 +8,6 @@ SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 
 -- -----------------------------------------------------
--- Schema ferrocene
--- -----------------------------------------------------
-
--- -----------------------------------------------------
--- Schema ferrocene
--- -----------------------------------------------------
-CREATE SCHEMA IF NOT EXISTS `ferrocene` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ;
-USE `ferrocene` ;
-
--- -----------------------------------------------------
 -- Table `group`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `group` (
@@ -320,109 +310,109 @@ DELIMITER $$
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`group_BEFORE_INSERT` BEFORE INSERT ON `group` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'GROUP');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'GROUP');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`group_BEFORE_DELETE` BEFORE DELETE ON `group` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`app_BEFORE_INSERT` BEFORE INSERT ON `app` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'APP');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'APP');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`app_BEFORE_DELETE` BEFORE DELETE ON `app` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`user_BEFORE_INSERT` BEFORE INSERT ON `user` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'USER');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'USER');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`user_BEFORE_DELETE` BEFORE DELETE ON `user` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`sessions_BEFORE_INSERT` BEFORE INSERT ON `sessions` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'SESSION');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'SESSION');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`sessions_BEFORE_DELETE` BEFORE DELETE ON `sessions` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`basic_otp_BEFORE_INSERT` BEFORE INSERT ON `basic_otp` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'B_OTP');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'B_OTP');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`basic_otp_BEFORE_DELETE` BEFORE DELETE ON `basic_otp` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`auto_otp_BEFORE_INSERT` BEFORE INSERT ON `auto_otp` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'A_OTP');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'A_OTP');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`auto_otp_BEFORE_DELETE` BEFORE DELETE ON `auto_otp` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`webauthn_BEFORE_INSERT` BEFORE INSERT ON `webauthn` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'WEBAUTHN');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'WEBAUTHN');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`webauthn_BEFORE_DELETE` BEFORE DELETE ON `webauthn` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`scope_BEFORE_INSERT` BEFORE INSERT ON `scope` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'SCOPE');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'SCOPE');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`scope_BEFORE_DELETE` BEFORE DELETE ON `scope` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`password_BEFORE_INSERT` BEFORE INSERT ON `password` FOR EACH ROW
 BEGIN
-	INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'PASSWORD');
+  INSERT INTO `object_type` (`uuid`, `type`) VALUES (NEW.`uuid`, 'PASSWORD');
 END$$
 
 USE `ferrocene`$$
 CREATE DEFINER = CURRENT_USER TRIGGER `ferrocene`.`password_BEFORE_DELETE` BEFORE DELETE ON `password` FOR EACH ROW
 BEGIN
-	DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
+  DELETE FROM `object_type` WHERE `uuid` = OLD.`uuid`;
 END$$
 
 
