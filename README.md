@@ -21,3 +21,7 @@ A "common base" for Web Apps.
 ## Quirks
 
   * Each user can have multiple usernames. (this allows login via email, SSN, computer username, etc)
+
+## Usage
+
+Default user is `admin` and default password is `admin`.

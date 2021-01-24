@@ -113,6 +113,15 @@ fn login_post(input: Form<LoginFormInput>) -> Template {
 
 #[tokio::main]
 async fn main() {
+    // let mut hasher = argonautica::Hasher::default();
+    // hasher.opt_out_of_secret_key(true);
+    // let hash = hasher
+    //     .with_password("admin")
+    //     .with_salt("saltsaltsalt")
+    //     .hash()
+    //     .unwrap();
+    // println!("{:?}", hash);
+
     let config = config::load_config();
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
