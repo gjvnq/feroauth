@@ -2,6 +2,13 @@ use crate::config::Config;
 use crate::prelude::*;
 use sqlx::mysql::MySqlPoolOptions;
 
+pub static mut DB_POOL: Option<sqlx::Pool<sqlx::MySql>> = None;
+
+#[derive(Debug)]
+pub struct DbConn {
+    pool: MySqlPool
+}
+
 pub async fn get_pool(config: &Config) -> MySqlPool {
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
@@ -41,4 +48,19 @@ pub async fn get_pool(config: &Config) -> MySqlPool {
     };
 
     pool
+}
+
+pub fn get_db_pool() -> &'static sqlx::Pool<sqlx::MySql> {
+    unsafe { DB_POOL.as_ref().unwrap() }
+}
+
+pub async fn get_tx() -> Transaction<'static> {
+    let tx = get_db_pool().begin().await;
+    match tx {
+        Ok(tx) => tx,
+        Err(err) => {
+            error!("Failed to get DB transaction: {:?}", err);
+            panic!("Failed to get DB transaction: {:?}", err);
+        },
+    }
 }

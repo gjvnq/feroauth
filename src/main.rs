@@ -63,6 +63,11 @@ fn index() -> &'static str {
     "Hello, world!"
 }
 
+#[get("/async_test")]
+async fn async_test() -> String {
+    "Hello".to_string()
+}
+
 #[get("/login?<username>")]
 fn login_get(username: Option<String>) -> Template {
     let base_ctx = BasicCtx::new("Login".to_string(), None, true);
@@ -75,16 +80,13 @@ fn login_get(username: Option<String>) -> Template {
     Template::render("login", &ctx)
 }
 
-fn hash_password(_pass: String) -> String {
-    // TODO: hash SHA-256
-    return "".to_string();
-}
-
 #[post("/login", data = "<input>")]
-fn login_post(input: Form<LoginFormInput>) -> Template {
+async fn login_post(input: Form<LoginFormInput>) -> Template {
     let base_ctx = BasicCtx::new("Login".to_string(), None, true);
     let username = input.username.clone().unwrap_or_default();
     // get user
+    let mut tx = get_tx().await;
+    println!("{:?}", User::load_by_login_handle(&username, &mut tx).await);
 
     let got_password = input.password.is_some() || input.hashed_password.is_some();
     let stage = match input.username {
@@ -113,8 +115,8 @@ fn login_post(input: Form<LoginFormInput>) -> Template {
 #[tokio::main]
 async fn main() {
     unsafe {
-        CONFIG = Some(config::load_config());
-        DB_POOL = Some(db::get_pool(get_config()).await);
+        crate::config::CONFIG = Some(config::load_config());
+        crate::db::DB_POOL = Some(db::get_pool(get_config()).await);
     }
 
     // let bytes = [4, 54, 67, 12, 43, 2, 98, 76, 32, 50, 87, 5, 1, 33, 43, 87];
