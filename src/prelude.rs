@@ -8,11 +8,7 @@ pub use std::io::Result as IOResult;
 
 pub use uuid::Uuid;
 
-pub use rocket::request::Form;
-
 pub use serde::{Deserialize, Serialize};
-
-pub use rocket_contrib::templates::Template;
 
 pub use sqlx::mysql::MySqlPool;
 pub use sqlx::Error as SQLError;
