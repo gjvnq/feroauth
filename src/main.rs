@@ -11,6 +11,10 @@ extern crate log;
 
 extern crate serde_json;
 
+use tera::Context;
+use actix_web::HttpRequest;
+use tera::Tera;
+use tera::Template;
 use sqlx::mysql::MySqlPoolOptions;
 use dotenv::dotenv;
 
@@ -24,6 +28,11 @@ use sqlx::mysql::MySqlConnectOptions;
 use sqlx::prelude::ConnectOptions;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+
+struct AppState {
+    tmpl: Tera,
+    db: sqlx::Pool<sqlx::MySql>
+}
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,6 +89,22 @@ async fn index() -> impl Responder {
         DELETE /todo/{id} -> delete todo with requested id
     "#
     )
+}
+
+#[get("/login")]
+async fn login_get(data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+    let base_ctx = BasicCtx::new("Login".to_string(), None, true);
+    let ctx = LoginPageCtx {
+        base: base_ctx,
+        username: "".to_string(),
+        hashed_password: "".to_string(),
+        stage: LoginStage::AskUsername,
+    };
+    // firgure out whatever the hell rocket-contrib did to make this kind of code more pleasant
+    let mut ctx = Context::new();
+    ctx.insert("name", "hi");
+    let rendered = data.tmpl.render("login.html.tera", &ctx).unwrap();
+    HttpResponse::Ok().body(rendered)
 }
 
 // #[get("/login?<username>")]
@@ -149,10 +174,18 @@ async fn main() -> FResult<()> {
     }
 
     let mut server = HttpServer::new(move || {
+        let tera =
+            Tera::new(
+                concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*.html.tera")
+            ).expect("Failed to load templates");
         App::new()
-            .data(db_pool.clone()) // pass database pool to application so we can access it inside handlers
+            .data(AppState{
+                tmpl: tera,
+                db: db_pool.clone()
+            })
             .service(fs::Files::new("/static", "static").prefer_utf8(true))
             .service(index)
+            .service(login_get)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");
