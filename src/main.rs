@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod prelude;
 mod user;
+mod templates;
 
 #[macro_use]
 extern crate actix_web;
@@ -101,10 +102,11 @@ async fn login_get(data: web::Data<AppState>, _req: HttpRequest) -> impl Respond
         stage: LoginStage::AskUsername,
     };
     // firgure out whatever the hell rocket-contrib did to make this kind of code more pleasant
-    let mut ctx = Context::new();
-    ctx.insert("name", "hi");
-    let rendered = data.tmpl.render("login.html.tera", &ctx).unwrap();
-    HttpResponse::Ok().body(rendered)
+    // let mut ctx = Context::new();
+    // ctx.insert("name", "hi");
+    // let rendered = data.tmpl.render("login.html", &ctx).unwrap();
+    // HttpResponse::Ok().body(rendered)
+    exec_html_template(&data.tmpl, "login.html", ctx)
 }
 
 // #[get("/login?<username>")]
@@ -174,13 +176,9 @@ async fn main() -> FResult<()> {
     }
 
     let mut server = HttpServer::new(move || {
-        let tera =
-            Tera::new(
-                concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*.html.tera")
-            ).expect("Failed to load templates");
         App::new()
             .data(AppState{
-                tmpl: tera,
+                tmpl: templates::load_templates(),
                 db: db_pool.clone()
             })
             .service(fs::Files::new("/static", "static").prefer_utf8(true))

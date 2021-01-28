@@ -18,6 +18,7 @@ pub struct LoginHandle {
 }
 
 impl User {
+    #[allow(unused)]
     pub fn new(name: String) -> User {
         User {
             uuid: Uuid::new_v4(),
@@ -28,6 +29,7 @@ impl User {
         }
     }
 
+    #[allow(unused)]
     pub fn set_display_name(new_name: String) -> Result<(), InvalidValue> {
         let new_name = new_name.trim();
         let len = new_name.chars().count();
@@ -80,6 +82,7 @@ impl User {
         })
     }
 
+    #[allow(unused)]
     pub async fn load_by_login_handle(
         login_handle: &str,
         tx: &mut Transaction<'_>,
