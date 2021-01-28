@@ -17,10 +17,12 @@ pub use chrono::{DateTime, TimeZone, Utc};
 
 pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;
-pub use actix_web::{Either, HttpRequest, HttpResponse, Responder};
+pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
+
+pub use qstring::QString;
 
 pub use crate::model::db::get_tx;
-pub use crate::templates::exec_html_template;
+pub use crate::templates::{exec_html_template, BasicCtx};
 pub use crate::user::User;
 
 pub const MIN_NON_EMPTY_STR: usize = 1;

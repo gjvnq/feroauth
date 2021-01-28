@@ -1,4 +1,5 @@
 mod auth;
+mod login;
 mod model;
 mod prelude;
 mod templates;
@@ -7,60 +8,15 @@ mod user;
 #[macro_use]
 extern crate actix_web;
 extern crate log;
-
 extern crate serde_json;
 
-use dotenv::dotenv;
-
+use crate::login::login_get;
 use crate::prelude::*;
 
-use std::env;
-
 use actix_files as fs;
-
-use actix_web::{web, App, HttpResponse, HttpServer};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct BasicCtx {
-    disable_vue: bool,
-    page_title: String,
-    page_desc: Option<String>,
-}
-
-impl BasicCtx {
-    pub fn new(title: String, desc: Option<String>, no_vue: bool) -> BasicCtx {
-        BasicCtx {
-            disable_vue: no_vue,
-            page_desc: desc,
-            page_title: title,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct LoginPageCtx {
-    base: BasicCtx,
-    username: String,
-    hashed_password: String,
-    stage: LoginStage,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum LoginStage {
-    AskUsername,
-    AskPassword,
-    AskSelect2FA,
-    AskOTP,
-    AskU2F,
-}
-
-#[derive(Debug)]
-struct LoginFormInput {
-    username: Option<String>,
-    password: Option<String>,
-    hashed_password: Option<String>,
-    otp: Option<String>,
-}
+use actix_web::{App, HttpResponse, HttpServer};
+use dotenv::dotenv;
+use std::env;
 
 #[get("/")]
 async fn index() -> impl Responder {
@@ -75,67 +31,6 @@ async fn index() -> impl Responder {
     "#
     )
 }
-
-#[get("/login")]
-async fn login_get(data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
-    let base_ctx = BasicCtx::new("Login".to_string(), None, true);
-    let ctx = LoginPageCtx {
-        base: base_ctx,
-        username: "".to_string(),
-        hashed_password: "".to_string(),
-        stage: LoginStage::AskUsername,
-    };
-    // firgure out whatever the hell rocket-contrib did to make this kind of code more pleasant
-    // let mut ctx = Context::new();
-    // ctx.insert("name", "hi");
-    // let rendered = data.tmpl.render("login.html", &ctx).unwrap();
-    // HttpResponse::Ok().body(rendered)
-    exec_html_template(&data.tmpl, "login.html", ctx)
-}
-
-// #[get("/login?<username>")]
-// fn login_get(username: Option<String>) -> Template {
-//     let base_ctx = BasicCtx::new("Login".to_string(), None, true);
-//     let ctx = LoginPageCtx {
-//         base: base_ctx,
-//         username: username.unwrap_or_default(),
-//         hashed_password: "".to_string(),
-//         stage: LoginStage::AskUsername,
-//     };
-//     Template::render("login", &ctx)
-// }
-
-// #[post("/login", data = "<input>")]
-// async fn login_post(input: Form<LoginFormInput>) -> Template {
-//     let base_ctx = BasicCtx::new("Login".to_string(), None, true);
-//     let username = input.username.clone().unwrap_or_default();
-//     // get user
-//     let mut tx = get_tx().await;
-//     println!("{:?}", User::load_by_login_handle(&username, &mut tx).await);
-
-//     let got_password = input.password.is_some() || input.hashed_password.is_some();
-//     let stage = match input.username {
-//         None => LoginStage::AskUsername,
-//         Some(_) => match got_password {
-//             false => LoginStage::AskPassword,
-//             true => LoginStage::AskSelect2FA,
-//         },
-//     };
-//     let hashed_password = match &input.hashed_password {
-//         Some(v) => v.to_string(),
-//         None => match &input.password {
-//             Some(v) => hash_password(v.to_string()),
-//             None => "".to_string(),
-//         },
-//     };
-//     let ctx = LoginPageCtx {
-//         base: base_ctx,
-//         username: username,
-//         hashed_password: hashed_password,
-//         stage: stage,
-//     };
-//     Template::render("login", &ctx)
-// }
 
 #[actix_web::main]
 async fn main() -> FResult<()> {
