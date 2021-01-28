@@ -1,17 +1,24 @@
-use crate::config::Config;
 use crate::prelude::*;
+use sqlx::mysql::MySqlConnectOptions;
 use sqlx::mysql::MySqlPoolOptions;
+use sqlx::ConnectOptions;
 
 pub static mut DB_POOL: Option<sqlx::Pool<sqlx::MySql>> = None;
 
 #[derive(Debug)]
 pub struct DbConn {
-    pool: MySqlPool
+    pool: MySqlPool,
 }
 
-pub async fn get_pool(config: &Config) -> MySqlPool {
+pub async fn get_pool(db_host: &str, db_user: &str, db_pass: &str, db_name: &str) -> MySqlPool {
+    let mut conn_opts = MySqlConnectOptions::new()
+        .host(&db_host)
+        .username(&db_user)
+        .password(&db_pass)
+        .database(&db_name);
+
+    conn_opts.log_statements(log::LevelFilter::Debug);
     let pool = MySqlPoolOptions::new()
-        .max_connections(5)
         .after_connect(|conn| {
             Box::pin(async move {
                 // Set timezone to UTC
@@ -21,7 +28,7 @@ pub async fn get_pool(config: &Config) -> MySqlPool {
                 Ok(())
             })
         })
-        .connect(&config.db)
+        .connect_with(conn_opts)
         .await
         .unwrap();
 
@@ -61,6 +68,6 @@ pub async fn get_tx() -> Transaction<'static> {
         Err(err) => {
             error!("Failed to get DB transaction: {:?}", err);
             panic!("Failed to get DB transaction: {:?}", err);
-        },
+        }
     }
 }

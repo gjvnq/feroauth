@@ -1,5 +1,3 @@
-pub use crate::config::Config;
-
 pub use log::{debug, error, info, trace, warn};
 
 pub use std::io::Error as IOError;
@@ -17,15 +15,13 @@ pub use sqlx::Result as SQLResult;
 
 pub use chrono::{DateTime, TimeZone, Utc};
 
-pub use actix_web::Either;
-pub use actix_web::web::HttpResponse;
 pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;
+pub use actix_web::{Either, HttpRequest, HttpResponse, Responder};
 
-pub use crate::user::User;
-pub use crate::db::get_tx;
-pub use crate::config::get_config;
+pub use crate::model::db::get_tx;
 pub use crate::templates::exec_html_template;
+pub use crate::user::User;
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
 
@@ -65,7 +61,9 @@ impl FError {
 }
 
 impl std::fmt::Display for FError {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { todo!() }
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        todo!()
+    }
 }
 
 impl actix_web::error::ResponseError for FError {
@@ -106,4 +104,10 @@ pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
         Ok(v) => Ok(v),
         Err(_) => Err(FError::UuidParseError(format!("{:?}", val))),
     }
+}
+
+use tera::Tera;
+pub struct AppState {
+    pub tmpl: Tera,
+    pub db: sqlx::Pool<sqlx::MySql>,
 }

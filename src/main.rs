@@ -1,40 +1,24 @@
 mod auth;
-mod config;
-mod db;
+mod model;
 mod prelude;
-mod user;
 mod templates;
+mod user;
 
 #[macro_use]
 extern crate actix_web;
-#[macro_use]
 extern crate log;
 
 extern crate serde_json;
 
-use tera::Context;
-use actix_web::HttpRequest;
-use tera::Tera;
-use tera::Template;
-use sqlx::mysql::MySqlPoolOptions;
 use dotenv::dotenv;
 
 use crate::prelude::*;
 
 use std::env;
 
-
 use actix_files as fs;
-use sqlx::mysql::MySqlConnectOptions;
-use sqlx::prelude::ConnectOptions;
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-
-struct AppState {
-    tmpl: Tera,
-    db: sqlx::Pool<sqlx::MySql>
-}
-
+use actix_web::{web, App, HttpResponse, HttpServer};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BasicCtx {
@@ -162,24 +146,17 @@ async fn main() -> FResult<()> {
     let db_user = env::var("DB_USER").expect("DB_USER is not set in .env file");
     let db_pass = env::var("DB_PASS").expect("DB_PASS is not set in .env file");
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
-    let mut conn_opts = MySqlConnectOptions::new()
-        .host(&db_host)
-        .username(&db_user)
-        .password(&db_pass)
-        .database(&db_name);
-    conn_opts.log_statements(log::LevelFilter::Debug);
-    let db_pool = MySqlPoolOptions::new()
-        .connect_with(conn_opts).await?;
+    let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
 
     unsafe {
-        db::DB_POOL = Some(db_pool.clone());
+        model::db::DB_POOL = Some(db_pool.clone());
     }
 
     let mut server = HttpServer::new(move || {
         App::new()
-            .data(AppState{
+            .data(AppState {
                 tmpl: templates::load_templates(),
-                db: db_pool.clone()
+                db: db_pool.clone(),
             })
             .service(fs::Files::new("/static", "static").prefer_utf8(true))
             .service(index)
