@@ -30,18 +30,17 @@ impl User {
     }
 
     #[allow(unused)]
-    pub fn set_display_name(new_name: String) -> Result<(), InvalidValue> {
-        let new_name = new_name.trim();
-        let len = new_name.chars().count();
+    pub fn is_valid(&self) -> Vec<InvalidValue> {
+        let len = self.display_name.chars().count();
+        let mut ans = vec![];
         if !(MIN_NON_EMPTY_STR < len && len <= MAX_DISPLAY_NAME_LEN) {
-            Err(InvalidValue::OutOfRange(
+            ans.push(InvalidValue::OutOfRange(
                 "user.display_name".to_string(),
                 MIN_NON_EMPTY_STR,
                 MAX_DISPLAY_NAME_LEN,
             ))
-        } else {
-            Ok(())
         }
+        ans
     }
 
     pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {

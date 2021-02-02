@@ -4,13 +4,11 @@ pub use std::io::Error as IOError;
 pub use std::io::ErrorKind as IOErrorKind;
 pub use std::io::Result as IOResult;
 
-pub use uuid::Uuid;
-
 pub use serde::{Deserialize, Serialize};
 
+pub use sqlx::types::Uuid;
 pub use sqlx::mysql::MySqlPool;
 pub use sqlx::Error as SQLError;
-pub use sqlx::Executor;
 pub use sqlx::Result as SQLResult;
 
 pub use chrono::{DateTime, TimeZone, Utc};
@@ -23,7 +21,6 @@ pub use qstring::QString;
 
 pub use crate::model::db::get_tx;
 pub use crate::templates::{exec_html_template, BasicCtx};
-pub use crate::user::User;
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
 

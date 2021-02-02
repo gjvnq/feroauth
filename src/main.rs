@@ -1,9 +1,7 @@
-mod auth;
 mod login;
 mod model;
 mod prelude;
 mod templates;
-mod user;
 
 #[macro_use]
 extern crate actix_web;

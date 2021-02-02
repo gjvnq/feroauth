@@ -19,15 +19,6 @@ pub async fn get_pool(db_host: &str, db_user: &str, db_pass: &str, db_name: &str
 
     conn_opts.log_statements(log::LevelFilter::Debug);
     let pool = MySqlPoolOptions::new()
-        .after_connect(|conn| {
-            Box::pin(async move {
-                // Set timezone to UTC
-                conn.execute("SET time_zone = \"+00:00\";").await?;
-                conn.execute("SET @@session.time_zone = \"+00:00\"").await?;
-
-                Ok(())
-            })
-        })
         .connect_with(conn_opts)
         .await
         .unwrap();
