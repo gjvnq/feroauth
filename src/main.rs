@@ -8,8 +8,8 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
-use crate::login::login_get;
 use crate::prelude::*;
+use crate::login::login_get;
 
 use actix_files as fs;
 use actix_web::{App, HttpResponse, HttpServer};
@@ -51,6 +51,8 @@ async fn main() -> FResult<()> {
                 tmpl: templates::load_templates(),
                 db: db_pool.clone(),
             })
+            // add cookies
+            .wrap(CookieSession::signed(&[0; 32]).secure(false))
             .service(fs::Files::new("/static", "static").prefer_utf8(true))
             .service(index)
             .service(login_get)

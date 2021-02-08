@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::model::prelude::*;
 use sqlx::mysql::MySqlConnectOptions;
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::ConnectOptions;

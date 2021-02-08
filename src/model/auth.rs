@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::model::prelude::*;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum LoginAnswer {

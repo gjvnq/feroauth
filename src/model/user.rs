@@ -1,8 +1,8 @@
-use crate::prelude::*;
+use crate::model::prelude::*;
 
 pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     uuid: Uuid,
     display_name: String,
@@ -11,13 +11,17 @@ pub struct User {
     login_handles: Vec<LoginHandle>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginHandle {
     handle: String,
     kind: String,
 }
 
 impl User {
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
+
     #[allow(unused)]
     pub fn new(name: String) -> User {
         User {
