@@ -1,6 +1,15 @@
 use crate::prelude::*;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub enum LoginAnswer {
+    WrongPassword,
+    Wrong2FA,
+    Select2FA,
+    LoggedIn
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
 pub enum OTP {
     TOTP(BaseOTP),
     HOTP(BaseOTP),

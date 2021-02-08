@@ -6,8 +6,8 @@ pub use std::io::Result as IOResult;
 
 pub use serde::{Deserialize, Serialize};
 
-pub use sqlx::types::Uuid;
 pub use sqlx::mysql::MySqlPool;
+pub use sqlx::types::Uuid;
 pub use sqlx::Error as SQLError;
 pub use sqlx::Result as SQLResult;
 
@@ -18,6 +18,8 @@ pub use actix_web::http::header as httpHeader;
 pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
 pub use qstring::QString;
+
+pub use argonautica::Error as ArgoError;
 
 pub use crate::model::db::get_tx;
 pub use crate::templates::{exec_html_template, BasicCtx};
@@ -39,6 +41,7 @@ pub enum FError {
     // NodeNoNum,
     InvalidValue(InvalidValue),
     UuidParseError(String),
+    ArgoError(ArgoError),
     NotImplemented,
     // NoMoreResults,
 }
@@ -88,6 +91,12 @@ impl std::convert::From<IOError> for FError {
 impl std::convert::From<SQLError> for FError {
     fn from(err: SQLError) -> Self {
         FError::SQLError(err)
+    }
+}
+
+impl std::convert::From<ArgoError> for FError {
+    fn from(err: ArgoError) -> Self {
+        FError::ArgoError(err)
     }
 }
 

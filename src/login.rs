@@ -27,7 +27,11 @@ struct LoginPageCtx {
 
 #[get("/login")]
 async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    crate::model::password::Password::load_by_user_uuid(Uuid::parse_str("d6fcb336-ee52-416d-9aa0-4a0f7d59612c").unwrap(), &mut data.db.begin().await.unwrap()).await;
+    crate::model::password::Password::load_by_user_uuid(
+        Uuid::parse_str("d6fcb336-ee52-416d-9aa0-4a0f7d59612c").unwrap(),
+        &mut data.db.begin().await.unwrap(),
+    )
+    .await;
 
     let query_str = req.query_string();
     let qs = QString::from(query_str);
