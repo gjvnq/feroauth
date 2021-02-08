@@ -448,7 +448,7 @@ SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 -- Data for table `user`
 -- -----------------------------------------------------
 START TRANSACTION;
-INSERT INTO `user` (`uuid`, `display_name`, `added`, `last_login`) VALUES (0xD6FCB336EE52416D9AA04A0F7D59612C, 'Super Admin', 'NOW()', NULL);
+INSERT INTO `user` (`uuid`, `display_name`, `added`, `last_login`) VALUES (0xD6FCB336EE52416D9AA04A0F7D59612C, 'Super Admin', NOW(), NULL);
 
 COMMIT;
 
@@ -457,7 +457,7 @@ COMMIT;
 -- Data for table `login_handle`
 -- -----------------------------------------------------
 START TRANSACTION;
-INSERT INTO `login_handle` (`login_handle`, `user_uuid`, `kind`, `added`) VALUES ('admin', 0xD6FCB336EE52416D9AA04A0F7D59612C, 'OTHER', 'NOW()');
+INSERT INTO `login_handle` (`login_handle`, `user_uuid`, `kind`, `added`) VALUES ('admin', 0xD6FCB336EE52416D9AA04A0F7D59612C, 'OTHER', NOW());
 
 COMMIT;
 
@@ -478,7 +478,7 @@ COMMIT;
 -- Data for table `password`
 -- -----------------------------------------------------
 START TRANSACTION;
-INSERT INTO `password` (`uuid`, `user_uuid`, `name`, `algorithm`, `password`, `requires_2fa`, `added`, `last_used`) VALUES (0x3B2D4234E81448F0808BBBBF9B7BF5AB, 0xD6FCB336EE52416D9AA04A0F7D59612C, DEFAULT, 'Argon2', '$argon2id$v=19$m=4096,t=192,p=16$c2FsdHNhbHRzYWx0$tz06nxFEeiD7jm+po95x67Ky2K/4BstPcy+7flDnKt0', F, DEFAULT, NULL);
+INSERT INTO `password` (`uuid`, `user_uuid`, `name`, `algorithm`, `password`, `requires_2fa`, `added`, `last_used`) VALUES (0x3B2D4234E81448F0808BBBBF9B7BF5AB, 0xD6FCB336EE52416D9AA04A0F7D59612C, DEFAULT, 'Argon2', '$argon2id$v=19$m=4096,t=192,p=16$c2FsdHNhbHRzYWx0$tz06nxFEeiD7jm+po95x67Ky2K/4BstPcy+7flDnKt0', 0, DEFAULT, NULL);
 
 COMMIT;
 
