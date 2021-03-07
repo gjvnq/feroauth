@@ -1,4 +1,13 @@
+use crate::model::password::PasswordCheck;
 use crate::prelude::*;
+use std::collections::HashSet;
+
+///
+const COOKIE_USERS_LIST: &'static str = "current_users";
+const COOKIE_LOGIN_IN_STAGE: &'static str = "login_stage";
+const COOKIE_LOGIN_IN_UUID: &'static str = "login_uuid";
+const COOKIE_LOGIN_IN_NAME: &'static str = "login_name";
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 enum LoginStage {
     AskUsername,
@@ -22,7 +31,9 @@ struct LoginFormInput {
 struct LoginPageCtx {
     base: BasicCtx,
     username: String,
+    password: String,
     stage: LoginStage,
+    err_msg: String,
 }
 
 #[get("/login")]
@@ -44,6 +55,8 @@ async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responde
     let ctx = LoginPageCtx {
         base: base_ctx,
         username: username.to_string(),
+        password: "".to_string(),
+        err_msg: "".to_string(),
         stage: LoginStage::AskUsername,
     };
     exec_html_template(&data.tmpl, "login.html", ctx)
@@ -54,33 +67,36 @@ async fn login_post(
     data: web::Data<AppState>,
     input: web::Form<LoginFormInput>,
     session: Session,
-    req: HttpRequest,
+    _req: HttpRequest,
 ) -> impl Responder {
-    let mut user_not_found = false;
-    let mut wrong_password = false;
-    let mut internal_error = false;
     let mut tx = get_tx().await;
-    let mut stage = match session.get::<LoginStage>("ferrocene_login_stage") {
+    let mut err_msg = "".to_string();
+    let mut stage = match session.get::<LoginStage>(COOKIE_LOGIN_IN_STAGE) {
         Ok(Some(v)) => v,
         _ => LoginStage::AskUsername,
     };
-    let mut user = match session.get::<User>("ferrocene_login_user") {
+    let mut user = None;
+    let mut user_uuid = match session.get::<Uuid>(COOKIE_LOGIN_IN_UUID) {
         Ok(v) => v,
         _ => None,
     };
 
-    // if user.is_some() {
-    //     match User::load_by_uuid(&user_uuid, &mut tx).await {
-    //         Ok(val) => user = val,
-    //         Err(err) => {
-    //             error!("Failed to load user {}: {:?}", user_uuid, err);
-    //             user = None;
-    //             stage = LoginStage::AskUsername;
-    //         },
-    //     }
-    // }
-
-    if user.is_none() {
+    if let Some(user_uuid) = user_uuid {
+        match User::load_by_uuid(user_uuid, &mut tx).await {
+            Ok(val) => {
+                user = Some(val);
+            }
+            Err(err) => {
+                if err.is_not_found() {
+                    warn!("User not found: {}", user_uuid);
+                    err_msg = "User not found".to_string();
+                } else {
+                    error!("Failed to find user for handle {}: {:?}", user_uuid, err);
+                    err_msg = "Something went wrong. It's not your fault.".to_string();
+                }
+            }
+        }
+    } else {
         if input.username.is_some() {
             let username = input.username.as_ref().unwrap();
             match User::load_by_login_handle(username, &mut tx).await {
@@ -90,10 +106,10 @@ async fn login_post(
                 Err(err) => {
                     if err.is_not_found() {
                         warn!("User not found: {}", username);
-                        user_not_found = true;
+                        err_msg = "User not found".to_string();
                     } else {
                         error!("Failed to find user for handle {}: {:?}", username, err);
-                        internal_error = true;
+                        err_msg = "Something went wrong. It's not your fault.".to_string();
                     }
                 }
             }
@@ -101,18 +117,29 @@ async fn login_post(
         } else {
             stage = LoginStage::AskUsername;
         }
+    }
+
+    if user.is_none() {
+        stage = LoginStage::AskUsername;
     } else {
-        if stage == LoginStage::AskPassword && user.is_some() {
-            let password = input.password.clone().unwrap_or("".to_string());
-            match Password::verify_for_user(user.as_ref().unwrap().get_uuid(), &password, &mut tx) {
-                WrongPassword => {
-                    wrong_password = true;
-                },
-                RightNo2FA => {
+        let password = input.password.clone().unwrap_or("".to_string());
+        if stage == LoginStage::AskPassword && user.is_some() && password.len() > 0 {
+            debug!("Got password {:?}", input.password);
+            match Password::verify_for_user(user.as_ref().unwrap().get_uuid(), &password, &mut tx)
+                .await
+            {
+                Ok(PasswordCheck::WrongPassword) => {
+                    err_msg = "Wrong password.".to_string();
+                }
+                Ok(PasswordCheck::RightNo2FA) => {
                     stage = LoginStage::Done;
-                },
-                RightNeeds2FA => {
+                }
+                Ok(PasswordCheck::RightNeeds2FA) => {
                     stage = LoginStage::AskSelect2FA;
+                }
+                Err(err) => {
+                    error!("{:?}", err);
+                    err_msg = "Something went wrong. It's not your fault.".to_string();
                 }
             }
         }
@@ -135,25 +162,39 @@ async fn login_post(
 
     if stage == LoginStage::Done && user.is_some() {
         // TODO: extend this for multiple logged in accounts
-        if let Err(err) = session.set("ferrocene_current_user", user.unwrap().get_uuid()) {
+        let mut user_set = match session.get::<HashSet<Uuid>>(COOKIE_USERS_LIST) {
+            Ok(Some(v)) => v,
+            _ => HashSet::new(),
+        };
+        let user_uuid = user.unwrap().get_uuid();
+        user_set.insert(user_uuid);
+        if let Err(err) = session.set(COOKIE_USERS_LIST, user_set) {
             error!("{:?}", err);
         }
         // Clear values we won't need
-        session.remove("ferrocene_login_stage");
-        session.remove("ferrocene_login_user");
+        session.remove(COOKIE_LOGIN_IN_STAGE);
+        session.remove(COOKIE_LOGIN_IN_UUID);
+        session.remove(COOKIE_LOGIN_IN_NAME);
     } else {
         // Update cookies
-        if let Err(err) = session.set("ferrocene_login_stage", stage) {
+        if let Err(err) = session.set(COOKIE_LOGIN_IN_STAGE, stage) {
             error!("{:?}", err);
         }
-        if let Err(err) = session.set("ferrocene_login_user", user) {
+        if let Err(err) = session.set(COOKIE_LOGIN_IN_UUID, user_uuid) {
             error!("{:?}", err);
+        }
+        if let Some(user) = user {
+            if let Err(err) = session.set(COOKIE_LOGIN_IN_NAME, user.display_name) {
+                error!("{:?}", err);
+            }
         }
     }
 
     let ctx = LoginPageCtx {
         base: BasicCtx::new("Login".to_string(), None, true),
         username: input.username.clone().unwrap_or_default(),
+        password: input.password.clone().unwrap_or_default(),
+        err_msg: err_msg,
         stage: stage,
     };
     exec_html_template(&data.tmpl, "login.html", ctx)

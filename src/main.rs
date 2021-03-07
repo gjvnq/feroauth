@@ -9,7 +9,6 @@ extern crate log;
 extern crate serde_json;
 
 use crate::prelude::*;
-use crate::login::login_get;
 
 use actix_files as fs;
 use actix_web::{App, HttpResponse, HttpServer};
@@ -17,17 +16,16 @@ use dotenv::dotenv;
 use std::env;
 
 #[get("/")]
-async fn index() -> impl Responder {
-    HttpResponse::Ok().body(r#"
-        Welcome to Actix-web with SQLx Todos example.
-        Available routes:
-        GET /todos -> list of all todos
-        POST /todo -> create new todo, example: { "description": "learn actix and sqlx", "done": false }
-        GET /todo/{id} -> show one todo with requested id
-        PUT /todo/{id} -> update todo with requested id, example: { "description": "learn actix and sqlx", "done": true }
-        DELETE /todo/{id} -> delete todo with requested id
-    "#
-    )
+async fn index(session: Session) -> Result<String, actix_web::Error> {
+    // access session data
+    if let Some(count) = session.get::<i32>("counter")? {
+        println!("SESSION value: {}", count);
+        session.set("counter", count + 1)?;
+        Ok(format!("Welcome! {:?}", count))
+    } else {
+        session.set("counter", 1)?;
+        Ok("Welcome!".to_string())
+    }
 }
 
 #[actix_web::main]
@@ -52,10 +50,16 @@ async fn main() -> FResult<()> {
                 db: db_pool.clone(),
             })
             // add cookies
-            .wrap(CookieSession::signed(&[0; 32]).secure(false))
+            .wrap(
+                CookieSession::signed(&[0; 32])
+                    .name("feroauth")
+                    .http_only(true)
+                    .secure(false),
+            )
             .service(fs::Files::new("/static", "static").prefer_utf8(true))
             .service(index)
-            .service(login_get)
+            .service(login::login_get)
+            .service(login::login_post)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

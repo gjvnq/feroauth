@@ -10,7 +10,7 @@
       }
       main#login-form {
         width: 100%;
-        max-width: 300px;
+        max-width: 30rem;
         margin: auto;
       }
     </style>
@@ -20,6 +20,9 @@
     <form id="login-form-actual" method="POST" action="/login">
       <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57">
       <h1 class="h3 mb-3 fw-normal">Log in</h1>
+      {% if err_msg != "" %}
+      <p class="badge bg-danger">{{ err_msg }}</p>
+      {% endif %}
       <div class="form-floating mb-3">
         <input type="text" inputmode="email" class="form-control" id="username" name="username" autocomplete="username" placeholder="name@example.com" value="{{ username }}" {% if stage != "AskUsername" %}readonly{% endif %} required>
         <label for="username">Email address or username</label>
@@ -30,55 +33,21 @@
         <input type="password" class="form-control" id="password" name="password" placeholder="Password" autocomplete="current-password">
         <label for="password">Password</label>
       </div>
+      {% else %}
       {% endif %}
-      <input type="hidden" id="hashed_password" name="hashed_password" value="{{ hashed_password }}">
       {% if stage == "AskOTP" %}
+      <input type="hidden" id="password" name="password" value="{{ password }}">
       <div class="form-floating mb-3">
         <input type="text" inputmode="numeric" class="form-control" name="otp" id="otp" placeholder="OTP" autocomplete="one-time-code">
         <label for="otp">2FA Code</label>
       </div>
       {% endif %}
-
+      {% if stage == "Done" %}
+      <p class="badge bg-success">Right password</p>
+      {% else %}
       <button id="login-submit-btn" class="w-100 btn btn-lg btn-primary" type="submit">Continue</button>
+      {% endif %}
       <p class="mt-5 mb-3 text-muted">&copy; 2017-2020</p>
     </form>
   </main>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-	document.getElementById('password').addEventListener('change', resetHashedPassword);
-   document.getElementById('login-form-actual').addEventListener('submit', beforeSubmit);
-}, false);
-
-var hashingPassword = false;
-
-function resetHashedPassword() {
-	document.getElementById('hashed_password').value = '';
-}
-
-async function digestMessage(message) {
-	const msgUint8 = new TextEncoder().encode(message);
-	const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-	return hashHex;
-}
-
-function beforeSubmit(evt) {
-	let form = document.getElementById('login-form-actual');
-	let passwdElem = document.getElementById('password');
-	let hashedPasswdElem = document.getElementById('hashed_password');
-	passwdElem.readonly = true; // no user messing up stuff
-	if (!hashingPassword) {
-		hashingPassword = true;
-		digestMessage(passwdElem.value).then((res) => {
-			hashingPassword = false;
-			passwdElem.disabled = true; // this prevents the data from beign sent without risking messing with password managers
-			hashedPasswdElem.value = res;
-			form.submit();
-		});
-	}
-	return false;
-}
-
-</script>
 {% endblock content %}

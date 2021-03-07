@@ -5,10 +5,10 @@ pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     uuid: Uuid,
-    display_name: String,
+    pub display_name: String,
     added: DateTime<Utc>,
     last_login: Option<DateTime<Utc>>,
-    login_handles: Vec<LoginHandle>,
+    pub login_handles: Vec<LoginHandle>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

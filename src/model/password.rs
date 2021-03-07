@@ -66,6 +66,7 @@ impl Password {
         Ok(rows)
     }
 
+    /// Tries to use a clear text password to authenticate a user. This function considers all Password objects for the user and tries to find one that does not require 2FA.
     pub async fn verify_for_user(
         user_uuid: Uuid,
         cleartext: &str,
