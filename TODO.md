@@ -1,0 +1,4 @@
+- [ ] Fix cookie key
+- [ ] Add i18n
+- [ ] User creation
+- [ ] User selection (when multiple logged in)
