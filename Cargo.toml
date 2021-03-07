@@ -1,5 +1,5 @@
 [package]
-name = "ferrocene"
+name = "feroauth"
 version = "0.1.0"
 authors = ["G. Queiroz <gabrieljvnq@gmail.com>"]
 edition = "2018"
