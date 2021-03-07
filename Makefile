@@ -12,4 +12,4 @@ prepare:
 	cargo fetch
 
 run:
-	cargo watch -x run -w src -w src/model -w Makefile
+	cargo watch -x run -w src -w src/model -w templates -w Makefile
