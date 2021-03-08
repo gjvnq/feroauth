@@ -1,4 +1,4 @@
-- [ ] Fix cookie key
+- [ ] Use Session IDs on the cookie instead of the user UUIDs
 - [ ] Add i18n
 - [ ] User creation
 - [ ] User selection (when multiple logged in)

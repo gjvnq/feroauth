@@ -8,6 +8,7 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
+use hex::FromHex;
 use crate::prelude::*;
 
 use actix_files as fs;
@@ -38,6 +39,7 @@ async fn main() -> FResult<()> {
     let db_pass = env::var("DB_PASS").expect("DB_PASS is not set in .env file");
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
+    let cookie_key = <[u8; 32]>::from_hex(env::var("COOKIE_KEY").expect("COOKIE_KEY is not set in .env file")).expect("COOKIE_KEY must be exactly a 32 bytes hex encoded string");
 
     unsafe {
         model::db::DB_POOL = Some(db_pool.clone());
@@ -51,7 +53,7 @@ async fn main() -> FResult<()> {
             })
             // add cookies
             .wrap(
-                CookieSession::signed(&[0; 32])
+                CookieSession::signed(&cookie_key)
                     .name("feroauth")
                     .http_only(true)
                     .secure(false),
