@@ -2,8 +2,10 @@ use crate::model::password::PasswordCheck;
 use crate::prelude::*;
 use std::collections::HashSet;
 
-///
-const COOKIE_USERS_LIST: &'static str = "current_users";
+/// Indicates the cookie key that contains the list of active [`FSessionMin`].
+const COOKIE_SESSIONS_LIST: &'static str = "sessions";
+/// Indicates the cookie key that contains when the list of active sessions ([`COOKIE_SESSIONS_LIST`]) was last loaded from the DB.
+const COOKIE_LAST_CHECK: &'static str = "last_check";
 const COOKIE_LOGIN_IN_STAGE: &'static str = "login_stage";
 const COOKIE_LOGIN_IN_UUID: &'static str = "login_uuid";
 const COOKIE_LOGIN_IN_NAME: &'static str = "login_name";
@@ -42,7 +44,7 @@ async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responde
         "{:?}",
         crate::model::password::Password::load_by_user_uuid(
             Uuid::parse_str("d6fcb336-ee52-416d-9aa0-4a0f7d59612c").unwrap(),
-            &mut data.db.begin().await.unwrap(),
+            &mut data.new_tx().await.unwrap(),
         )
         .await
     );
@@ -67,8 +69,14 @@ async fn login_post(
     data: web::Data<AppState>,
     input: web::Form<LoginFormInput>,
     session: Session,
-    _req: HttpRequest,
+    req: HttpRequest,
 ) -> impl Responder {
+    println!("{:?}", req.headers());
+    let user_agent = req.headers().get("user-agent").unwrap().to_str().unwrap();
+    let ip_addr = req.peer_addr().unwrap().ip();
+    println!("{}", user_agent);
+    println!("{}", ip_addr);
+
     let mut tx = get_tx().await;
     let mut err_msg = "".to_string();
     let mut stage = match session.get::<LoginStage>(COOKIE_LOGIN_IN_STAGE) {
@@ -76,7 +84,7 @@ async fn login_post(
         _ => LoginStage::AskUsername,
     };
     let mut user = None;
-    let mut user_uuid = match session.get::<Uuid>(COOKIE_LOGIN_IN_UUID) {
+    let user_uuid = match session.get::<Uuid>(COOKIE_LOGIN_IN_UUID) {
         Ok(v) => v,
         _ => None,
     };
@@ -161,14 +169,18 @@ async fn login_post(
     }
 
     if stage == LoginStage::Done && user.is_some() {
+        let min_user = user.as_ref().unwrap().as_min_user();
+        let fsession = FSession::new(&min_user, &min_user, false, ip_addr, user_agent);
+        let mut tx = data.new_tx().await.unwrap();
+        println!("{:?}", fsession.save(&mut tx).await);
+        println!("{:?}", tx.commit().await);
         // TODO: extend this for multiple logged in accounts
-        let mut user_set = match session.get::<HashSet<Uuid>>(COOKIE_USERS_LIST) {
+        let mut session_set = match session.get::<HashSet<Uuid>>(COOKIE_SESSIONS_LIST) {
             Ok(Some(v)) => v,
             _ => HashSet::new(),
         };
-        let user_uuid = user.unwrap().get_uuid();
-        user_set.insert(user_uuid);
-        if let Err(err) = session.set(COOKIE_USERS_LIST, user_set) {
+        session_set.insert(fsession.get_uuid());
+        if let Err(err) = session.set(COOKIE_SESSIONS_LIST, session_set) {
             error!("{:?}", err);
         }
         // Clear values we won't need

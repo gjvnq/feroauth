@@ -13,3 +13,9 @@ pub struct AppState {
     pub tmpl: Tera,
     pub db: sqlx::Pool<sqlx::MySql>,
 }
+
+impl AppState {
+    pub async fn new_tx(&self) -> FResult<Transaction<'_>> {
+        Ok(self.db.begin().await?)
+    }
+}

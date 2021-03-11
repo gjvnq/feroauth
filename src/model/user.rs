@@ -2,7 +2,7 @@ use crate::model::prelude::*;
 
 pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     uuid: Uuid,
     pub display_name: String,
@@ -11,13 +11,41 @@ pub struct User {
     pub login_handles: Vec<LoginHandle>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginHandle {
     handle: String,
     kind: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinUser {
+    uuid: Uuid,
+    pub display_name: String
+}
+
+impl MinUser {
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
+}
+
+impl std::convert::From<User> for MinUser {
+    fn from(val: User) -> Self {
+        MinUser{
+            uuid: val.uuid,
+            display_name: val.display_name
+        }
+    }
+}
+
 impl User {
+    pub fn as_min_user(&self) -> MinUser {
+        MinUser{
+            uuid: self.uuid,
+            display_name: self.display_name.clone()
+        }
+    }
+
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }

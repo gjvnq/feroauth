@@ -4,6 +4,8 @@ pub use std::io::Error as IOError;
 pub use std::io::ErrorKind as IOErrorKind;
 pub use std::io::Result as IOResult;
 
+pub use std::net::IpAddr;
+
 pub use serde::{Deserialize, Serialize};
 
 pub use sqlx::mysql::MySqlPool;
@@ -24,6 +26,7 @@ pub use qstring::QString;
 pub use argonautica::Error as ArgoError;
 
 pub use crate::model::db::get_tx;
+pub use crate::model::{FSession, MinUser};
 pub use crate::templates::{exec_html_template, BasicCtx};
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
