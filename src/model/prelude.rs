@@ -52,7 +52,6 @@ pub enum FError {
 }
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
-pub type Executor<'a> = dyn sqlx::Executor<'a, Database = sqlx::mysql::MySql>;
 pub type FResult<T> = Result<T, FError>;
 
 impl FError {
@@ -65,6 +64,22 @@ impl FError {
             },
             _ => false,
         }
+    }
+}
+
+/// Unwraps [`Result`] and returns the inner value or logs the error and panic
+#[inline]
+#[track_caller]
+#[allow(unused)]
+pub fn unwrap_or_log<T,E: std::fmt::Debug>(input: Result<T,E>, msg: &str) -> T {
+    use std::panic::Location;
+    match input {
+        Ok(val) => val,
+        Err(ref err) => {
+            let loc = Location::caller();
+            error!("{file}:{line}:{col} {msg}: {err:?}", file=loc.file(), line=loc.line(), col=loc.column(), msg=msg, err=err);
+            input.unwrap()
+        },
     }
 }
 

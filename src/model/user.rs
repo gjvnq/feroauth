@@ -34,7 +34,7 @@ impl MinUser {
     }
 
     #[allow(unused)]
-    pub async fn load_by_login_handle(login_handle: &str, tx: &mut Box<Executor<'_>>) -> FResult<MinUser> {
+    pub async fn load_by_login_handle(login_handle: &str, tx: &mut Transaction<'_>) -> FResult<MinUser> {
         // Remove trouble making whitespace
         let login_handle = login_handle.trim();
 

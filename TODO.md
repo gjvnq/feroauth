@@ -2,4 +2,6 @@
 - [ ] User creation
 - [ ] User selection (when multiple logged in)
 - [ ] Make error pages (including for panics)
+- [ ] Add loading animation after form submit
+- [ ] Add page for debugging the session (cookie and fsession)
 - [X] Use Session IDs on the cookie instead of the user UUIDs

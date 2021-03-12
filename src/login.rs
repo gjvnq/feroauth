@@ -5,7 +5,6 @@ use std::collections::HashSet;
 /// Indicates the cookie key that contains the list of active [`FSessionMin`].
 const COOKIE_SESSIONS_LIST: &'static str = "sessions";
 /// Indicates the cookie key that contains when the list of active sessions ([`COOKIE_SESSIONS_LIST`]) was last loaded from the DB.
-#[allow(unused)]
 const COOKIE_LAST_CHECK: &'static str = "last_check";
 /// Current stage of the login process
 const COOKIE_LOGIN_STAGE: &'static str = "login_stage";
@@ -80,7 +79,7 @@ async fn login_ask_username(
         ctx.stage = LoginStage::AskUsername;
         return true;
     }
-    match User::load_by_login_handle(&ctx.username, &mut tx).await {
+    match MinUser::load_by_login_handle(&ctx.username, &mut tx).await {
         Err(err) => {
             if err.is_not_found() {
                 warn!("User not found: {}", &ctx.username);
@@ -93,7 +92,7 @@ async fn login_ask_username(
         }
         Ok(user) => {
             ctx.stage = LoginStage::AskPassword;
-            ctx.user = Some(user.to_min_user());
+            ctx.user = Some(user);
             // This allows a script to send both the user and the password at the same time
             return false
         }
@@ -149,12 +148,6 @@ async fn login_post(
     session: Session,
     req: HttpRequest,
 ) -> impl Responder {
-    // TODO: refactor this thing into multiple, shorter functions
-    println!("{:?}", req.headers());
-    let user_agent = req.headers().get("user-agent").unwrap().to_str().unwrap();
-    let ip_addr = req.peer_addr().unwrap().ip();
-    println!("{}", user_agent);
-    println!("{}", ip_addr);
 
     // Load necessary info
     let mut ctx = LoginPageCtx {
@@ -187,18 +180,24 @@ async fn login_post(
     // If finished, create the FSession object
     if ctx.stage == LoginStage::Done {
         let user = ctx.user.as_ref().unwrap();
+        // Safety: no sane client would fail to send the user-agent.
+        let user_agent = req.headers().get("user-agent").unwrap().to_str().unwrap();
+        // Safety: how on Earth could we answer a request without the client's IP address?
+        let ip_addr = req.peer_addr().unwrap().ip();
+
+        // Make and save fsession to record the login info
         let fsession = FSession::new(&user, &user, false, ip_addr, user_agent);
         let mut tx = get_tx().await;
-        println!("{:?}", fsession.save(&mut tx).await);
-        println!("{:?}", tx.commit().await);
+        unwrap_or_log(fsession.save(&mut tx).await, "failed to save fsession");
+        unwrap_or_log(tx.commit().await, "failed to save fsession");
+
+        // Adjust cookies
         let mut session_set = match session.get::<HashSet<Uuid>>(COOKIE_SESSIONS_LIST) {
             Ok(Some(v)) => v,
             _ => HashSet::new(),
         };
         session_set.insert(fsession.get_uuid());
-        if let Err(err) = session.set(COOKIE_SESSIONS_LIST, session_set) {
-            error!("{:?}", err);
-        }
+        unwrap_or_log(session.set(COOKIE_SESSIONS_LIST, session_set), "failed to set sessions list cookie");
         // Clear values we won't need
         session.remove(COOKIE_LOGIN_STAGE);
         session.remove(COOKIE_LOGIN_USER);
