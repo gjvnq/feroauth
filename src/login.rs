@@ -5,10 +5,12 @@ use std::collections::HashSet;
 /// Indicates the cookie key that contains the list of active [`FSessionMin`].
 const COOKIE_SESSIONS_LIST: &'static str = "sessions";
 /// Indicates the cookie key that contains when the list of active sessions ([`COOKIE_SESSIONS_LIST`]) was last loaded from the DB.
+#[allow(unused)]
 const COOKIE_LAST_CHECK: &'static str = "last_check";
-const COOKIE_LOGIN_IN_STAGE: &'static str = "login_stage";
-const COOKIE_LOGIN_IN_UUID: &'static str = "login_uuid";
-const COOKIE_LOGIN_IN_NAME: &'static str = "login_name";
+/// Current stage of the login process
+const COOKIE_LOGIN_STAGE: &'static str = "login_stage";
+/// The user that is currently trying to log in
+const COOKIE_LOGIN_USER: &'static str = "login_user";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 enum LoginStage {
@@ -36,6 +38,7 @@ struct LoginPageCtx {
     password: String,
     stage: LoginStage,
     err_msg: String,
+    user: Option<MinUser>
 }
 
 #[get("/login")]
@@ -44,7 +47,7 @@ async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responde
         "{:?}",
         crate::model::password::Password::load_by_user_uuid(
             Uuid::parse_str("d6fcb336-ee52-416d-9aa0-4a0f7d59612c").unwrap(),
-            &mut data.new_tx().await.unwrap(),
+            &mut get_tx().await,
         )
         .await
     );
@@ -60,9 +63,84 @@ async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responde
         password: "".to_string(),
         err_msg: "".to_string(),
         stage: LoginStage::AskUsername,
+        user: None,
     };
     exec_html_template(&data.tmpl, "login.html", ctx)
 }
+
+async fn login_ask_username(
+    _data: &web::Data<AppState>,
+    _input: &web::Form<LoginFormInput>,
+    _session: &Session,
+    _req: &HttpRequest,
+    ctx: &mut LoginPageCtx
+    ) -> bool {
+    let mut tx = get_tx().await;
+    if ctx.username.len() == 0 {
+        ctx.stage = LoginStage::AskUsername;
+        return true;
+    }
+    match User::load_by_login_handle(&ctx.username, &mut tx).await {
+        Err(err) => {
+            if err.is_not_found() {
+                warn!("User not found: {}", &ctx.username);
+                ctx.err_msg = "User not found".to_string();
+            } else {
+                error!("Failed to find user for handle {}: {:?}", &ctx.username, err);
+                ctx.err_msg = "Something went wrong. It's not your fault.".to_string();
+            }
+            return true
+        }
+        Ok(user) => {
+            ctx.stage = LoginStage::AskPassword;
+            ctx.user = Some(user.to_min_user());
+            // This allows a script to send both the user and the password at the same time
+            return false
+        }
+    }
+}
+
+async fn login_ask_password(
+    _data: &web::Data<AppState>,
+    input: &web::Form<LoginFormInput>,
+    _session: &Session,
+    _req: &HttpRequest,
+    ctx: &mut LoginPageCtx
+    ) -> bool {
+    if ctx.user.is_none() {
+        ctx.stage = LoginStage::AskUsername;
+        return true;
+    }
+    let user = ctx.user.as_ref().unwrap();
+    let password = match &input.password {
+        Some(v) => v,
+        None => "",
+    };
+    if password.len() > 0 {
+        let mut tx = get_tx().await;
+        match Password::verify_for_user(user.get_uuid(), &password, &mut tx)
+            .await
+        {
+            Ok(PasswordCheck::WrongPassword) => {
+                ctx.err_msg = "Wrong password.".to_string();
+            }
+            Ok(PasswordCheck::RightNo2FA) => {
+                ctx.stage = LoginStage::Done;
+            }
+            Ok(PasswordCheck::RightNeeds2FA) => {
+                ctx.stage = LoginStage::AskSelect2FA;
+                return false;
+            }
+            Err(err) => {
+                error!("{:?}", err);
+                ctx.err_msg = "Something went wrong. It's not your fault.".to_string();
+            }
+        }
+    }
+
+    return true
+}
+
 
 #[post("/login")]
 async fn login_post(
@@ -71,110 +149,48 @@ async fn login_post(
     session: Session,
     req: HttpRequest,
 ) -> impl Responder {
+    // TODO: refactor this thing into multiple, shorter functions
     println!("{:?}", req.headers());
     let user_agent = req.headers().get("user-agent").unwrap().to_str().unwrap();
     let ip_addr = req.peer_addr().unwrap().ip();
     println!("{}", user_agent);
     println!("{}", ip_addr);
 
-    let mut tx = get_tx().await;
-    let mut err_msg = "".to_string();
-    let mut stage = match session.get::<LoginStage>(COOKIE_LOGIN_IN_STAGE) {
+    // Load necessary info
+    let mut ctx = LoginPageCtx {
+        base: BasicCtx::new("Login".to_string(), None, true),
+        username: input.username.clone().unwrap_or_default(),
+        password: input.password.clone().unwrap_or_default(),
+        err_msg: "".to_string(),
+        stage: LoginStage::AskUsername,
+        user: None
+    };
+    ctx.stage = match session.get::<LoginStage>(COOKIE_LOGIN_STAGE) {
         Ok(Some(v)) => v,
         _ => LoginStage::AskUsername,
     };
-    let mut user = None;
-    let user_uuid = match session.get::<Uuid>(COOKIE_LOGIN_IN_UUID) {
-        Ok(v) => v,
-        _ => None,
+    ctx.user = match session.get::<MinUser>(COOKIE_LOGIN_USER) {
+        Ok(Some(v)) => Some(v),
+        _ => None  
     };
 
-    if let Some(user_uuid) = user_uuid {
-        match User::load_by_uuid(user_uuid, &mut tx).await {
-            Ok(val) => {
-                user = Some(val);
-            }
-            Err(err) => {
-                if err.is_not_found() {
-                    warn!("User not found: {}", user_uuid);
-                    err_msg = "User not found".to_string();
-                } else {
-                    error!("Failed to find user for handle {}: {:?}", user_uuid, err);
-                    err_msg = "Something went wrong. It's not your fault.".to_string();
-                }
-            }
-        }
-    } else {
-        if input.username.is_some() {
-            let username = input.username.as_ref().unwrap();
-            match User::load_by_login_handle(username, &mut tx).await {
-                Ok(val) => {
-                    user = Some(val);
-                }
-                Err(err) => {
-                    if err.is_not_found() {
-                        warn!("User not found: {}", username);
-                        err_msg = "User not found".to_string();
-                    } else {
-                        error!("Failed to find user for handle {}: {:?}", username, err);
-                        err_msg = "Something went wrong. It's not your fault.".to_string();
-                    }
-                }
-            }
-            stage = LoginStage::AskPassword;
-        } else {
-            stage = LoginStage::AskUsername;
-        }
-    }
+    // Process what we recievd
+    let mut ready = false;
+    while !ready {
+        ready = match ctx.stage {
+            LoginStage::AskUsername => login_ask_username(&data, &input, &session, &req, &mut ctx).await,
+            LoginStage::AskPassword => login_ask_password(&data, &input, &session, &req, &mut ctx).await,
+            _ => unimplemented!()
+        };
+    };
 
-    if user.is_none() {
-        stage = LoginStage::AskUsername;
-    } else {
-        let password = input.password.clone().unwrap_or("".to_string());
-        if stage == LoginStage::AskPassword && user.is_some() && password.len() > 0 {
-            debug!("Got password {:?}", input.password);
-            match Password::verify_for_user(user.as_ref().unwrap().get_uuid(), &password, &mut tx)
-                .await
-            {
-                Ok(PasswordCheck::WrongPassword) => {
-                    err_msg = "Wrong password.".to_string();
-                }
-                Ok(PasswordCheck::RightNo2FA) => {
-                    stage = LoginStage::Done;
-                }
-                Ok(PasswordCheck::RightNeeds2FA) => {
-                    stage = LoginStage::AskSelect2FA;
-                }
-                Err(err) => {
-                    error!("{:?}", err);
-                    err_msg = "Something went wrong. It's not your fault.".to_string();
-                }
-            }
-        }
-
-        if stage == LoginStage::AskSelect2FA {
-            // todo
-            let _password = input.selection_2fa.clone().unwrap_or("".to_string());
-        }
-
-        if stage == LoginStage::AskOTP {
-            // todo
-            let _code_otp = input.code_otp.clone().unwrap_or("".to_string());
-        }
-
-        if stage == LoginStage::AskU2F {
-            // todo
-            let _code_u2f = input.code_u2f.clone().unwrap_or("".to_string());
-        }
-    }
-
-    if stage == LoginStage::Done && user.is_some() {
-        let min_user = user.as_ref().unwrap().as_min_user();
-        let fsession = FSession::new(&min_user, &min_user, false, ip_addr, user_agent);
-        let mut tx = data.new_tx().await.unwrap();
+    // If finished, create the FSession object
+    if ctx.stage == LoginStage::Done {
+        let user = ctx.user.as_ref().unwrap();
+        let fsession = FSession::new(&user, &user, false, ip_addr, user_agent);
+        let mut tx = get_tx().await;
         println!("{:?}", fsession.save(&mut tx).await);
         println!("{:?}", tx.commit().await);
-        // TODO: extend this for multiple logged in accounts
         let mut session_set = match session.get::<HashSet<Uuid>>(COOKIE_SESSIONS_LIST) {
             Ok(Some(v)) => v,
             _ => HashSet::new(),
@@ -184,30 +200,19 @@ async fn login_post(
             error!("{:?}", err);
         }
         // Clear values we won't need
-        session.remove(COOKIE_LOGIN_IN_STAGE);
-        session.remove(COOKIE_LOGIN_IN_UUID);
-        session.remove(COOKIE_LOGIN_IN_NAME);
+        session.remove(COOKIE_LOGIN_STAGE);
+        session.remove(COOKIE_LOGIN_USER);
     } else {
         // Update cookies
-        if let Err(err) = session.set(COOKIE_LOGIN_IN_STAGE, stage) {
+        if let Err(err) = session.set(COOKIE_LOGIN_STAGE, ctx.stage) {
             error!("{:?}", err);
         }
-        if let Err(err) = session.set(COOKIE_LOGIN_IN_UUID, user_uuid) {
-            error!("{:?}", err);
-        }
-        if let Some(user) = user {
-            if let Err(err) = session.set(COOKIE_LOGIN_IN_NAME, user.display_name) {
+        if let Some(user) = &ctx.user {
+            if let Err(err) = session.set(COOKIE_LOGIN_USER, user) {
                 error!("{:?}", err);
             }
         }
     }
 
-    let ctx = LoginPageCtx {
-        base: BasicCtx::new("Login".to_string(), None, true),
-        username: input.username.clone().unwrap_or_default(),
-        password: input.password.clone().unwrap_or_default(),
-        err_msg: err_msg,
-        stage: stage,
-    };
     exec_html_template(&data.tmpl, "login.html", ctx)
 }

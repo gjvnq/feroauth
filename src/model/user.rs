@@ -20,32 +20,57 @@ pub struct LoginHandle {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinUser {
     uuid: Uuid,
-    pub display_name: String
+    pub display_name: String,
+    pub handle: String
 }
 
 impl MinUser {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
+
+    #[allow(unused)]
+    pub fn mark_last_login(&self, tx: &mut Transaction<'_>) {
+    }
+
+    #[allow(unused)]
+    pub async fn load_by_login_handle(login_handle: &str, tx: &mut Box<Executor<'_>>) -> FResult<MinUser> {
+        // Remove trouble making whitespace
+        let login_handle = login_handle.trim();
+
+        trace!("Loading user {:?}", login_handle);
+        let base_row = sqlx::query!(
+            "SELECT `uuid`, `display_name` FROM `user` INNER JOIN `login_handle` ON (`user_uuid` = `uuid`) WHERE `login_handle` = ?",
+            login_handle
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        println!("{:?}", base_row);
+
+        Ok(MinUser {
+            uuid: parse_uuid_vec(base_row.uuid)?,
+            display_name: base_row.display_name,
+            handle: login_handle.to_string()
+        })
+    }
 }
 
 impl std::convert::From<User> for MinUser {
     fn from(val: User) -> Self {
-        MinUser{
-            uuid: val.uuid,
-            display_name: val.display_name
-        }
+        val.to_min_user()
     }
 }
 
 impl User {
-    pub fn as_min_user(&self) -> MinUser {
+    pub fn to_min_user(&self) -> MinUser {
         MinUser{
             uuid: self.uuid,
-            display_name: self.display_name.clone()
+            display_name: self.display_name.clone(),
+            handle: self.uuid.to_string()
         }
     }
 
+    #[allow(unused)]
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
