@@ -1,0 +1,38 @@
+{% extends "_base.html" %}
+{% block head %}
+    <style>
+    </style>
+{% endblock head %}
+{% block content %}
+  <div class="container">
+    <h3>HTTP Basics</h3>
+    <dl>
+      <dt>Method</dt>
+      <dd>{{ method }}</dd>
+      <dt>URL</dt>
+      <dd>{{ url }}</dd>
+      <dt>Version</dt>
+      <dd>{{ version }}</dd>
+      <dt>IP Address</dt>
+      <dd>{{ ip_addr }}</dd>
+    </dl>
+  </div>
+  <div class="container">
+    <h3>Session Info</h3>
+    <dl>
+      {% for item in session %}
+      <dt>{{ item.0 }}</dt>
+      <dd>{{ item.1 }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+  <div class="container">
+    <h3>HTTP Headers</h3>
+    <dl>
+      {% for item in headers %}
+      <dt>{{ item.0 }}</dt>
+      <dd>{{ item.1 }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+{% endblock content %}

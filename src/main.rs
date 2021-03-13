@@ -62,6 +62,7 @@ async fn main() -> FResult<()> {
             .service(index)
             .service(login::login_get)
             .service(login::login_post)
+            .service(login::debug_get)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

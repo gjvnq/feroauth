@@ -11,5 +11,5 @@ prepare:
 	cargo install cargo-watch
 	cargo fetch
 
-run:
+run-dev:
 	cargo watch -x run -w src -w src/model -w templates -w Makefile
