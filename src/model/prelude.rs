@@ -34,15 +34,22 @@ pub const MIN_NON_EMPTY_STR: usize = 1;
 #[inline]
 #[track_caller]
 #[allow(unused)]
-pub fn unwrap_or_log<T,E: std::fmt::Debug>(input: Result<T,E>, msg: &str) -> T {
+pub fn unwrap_or_log<T, E: std::fmt::Debug>(input: Result<T, E>, msg: &str) -> T {
     use std::panic::Location;
     match input {
         Ok(val) => val,
         Err(ref err) => {
             let loc = Location::caller();
-            error!("{file}:{line}:{col} {msg}: {err:?}", file=loc.file(), line=loc.line(), col=loc.column(), msg=msg, err=err);
+            error!(
+                "{file}:{line}:{col} {msg}: {err:?}",
+                file = loc.file(),
+                line = loc.line(),
+                col = loc.column(),
+                msg = msg,
+                err = err
+            );
             input.unwrap()
-        },
+        }
     }
 }
 
@@ -55,15 +62,12 @@ pub enum InvalidValue {
 pub enum FError {
     SQLError(SQLError),
     IOError(IOError),
-    // DirNotClean(PathBuf),
-    // TimeConversionErrorFromSecs(u64),
-    // FuseTypeParseError(String),
-    // NodeNoNum,
-    InvalidValue(InvalidValue),
+    SerializationError(String),
+    TemplateError(String, String),
+    // InvalidValue(InvalidValue),
     UuidParseError(String),
     ArgoError(ArgoError),
     NotImplemented,
-    // NoMoreResults,
 }
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -116,6 +120,7 @@ impl std::convert::From<ArgoError> for FError {
     }
 }
 
+#[allow(unused)]
 pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     match Uuid::parse_str(&val) {
         Ok(v) => Ok(v),

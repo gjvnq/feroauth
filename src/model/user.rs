@@ -21,7 +21,7 @@ pub struct LoginHandle {
 pub struct MinUser {
     uuid: Uuid,
     pub display_name: String,
-    pub handle: String
+    pub handle: String,
 }
 
 impl MinUser {
@@ -30,11 +30,13 @@ impl MinUser {
     }
 
     #[allow(unused)]
-    pub fn mark_last_login(&self, tx: &mut Transaction<'_>) {
-    }
+    pub fn mark_last_login(&self, tx: &mut Transaction<'_>) {}
 
     #[allow(unused)]
-    pub async fn load_by_login_handle(login_handle: &str, tx: &mut Transaction<'_>) -> FResult<MinUser> {
+    pub async fn load_by_login_handle(
+        login_handle: &str,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<MinUser> {
         // Remove trouble making whitespace
         let login_handle = login_handle.trim();
 
@@ -50,7 +52,7 @@ impl MinUser {
         Ok(MinUser {
             uuid: parse_uuid_vec(base_row.uuid)?,
             display_name: base_row.display_name,
-            handle: login_handle.to_string()
+            handle: login_handle.to_string(),
         })
     }
 }
@@ -63,10 +65,10 @@ impl std::convert::From<User> for MinUser {
 
 impl User {
     pub fn to_min_user(&self) -> MinUser {
-        MinUser{
+        MinUser {
             uuid: self.uuid,
             display_name: self.display_name.clone(),
-            handle: self.uuid.to_string()
+            handle: self.uuid.to_string(),
         }
     }
 

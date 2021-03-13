@@ -6,6 +6,11 @@
 {% block content %}
   <div class="container">
     <h1>{{ base.page_title }}</h1>
-    <p>{ { msg } }</p>
+    {% if code == 404 %}
+    <p>Go back. Go to homepage.</p>
+    {% endif %}
+    {% if code == 500 %}
+    <p>It's not your fault.</p>
+    {% endif %}
   </div>
 {% endblock content %}

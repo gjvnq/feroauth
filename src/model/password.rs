@@ -19,6 +19,7 @@ pub struct Password {
 }
 
 impl Password {
+    #[allow(unused)]
     pub fn new(user_uuid: Uuid, cleartext: String, requires_2fa: bool) -> FResult<Password> {
         let cleartext = cleartext.trim();
         let mut hasher = argonautica::Hasher::default();

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use actix_web::HttpResponse;
-use actix_web::Responder;
 
 use tera::Context;
 use tera::Tera;
@@ -24,13 +23,14 @@ impl BasicCtx {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmptyCtx {
-    pub base: BasicCtx
+    pub base: BasicCtx,
 }
 
 impl EmptyCtx {
+    #[allow(unused)]
     pub fn new(title: String, desc: Option<String>, no_vue: bool) -> EmptyCtx {
         EmptyCtx {
-            base: BasicCtx::new(title, desc, no_vue)
+            base: BasicCtx::new(title, desc, no_vue),
         }
     }
 }
@@ -40,33 +40,34 @@ pub fn load_templates() -> Tera {
         .expect("Failed to load templates")
 }
 
-pub fn basic_html_template(
-    tmpl_name: &str,
-    ctx: impl Serialize,
-) -> String {
-    let ctx = Context::from_serialize(ctx).map_err(|err| error!("Failed to render template {}: {:?}", tmpl_name, err)).unwrap();
-    let rendered = get_tmpl().render(&tmpl_name, &ctx).map_err(|err| error!("Failed to render template {}: {:?}", tmpl_name, err)).unwrap();
-    rendered
-}
-
 pub fn exec_html_template(
-    tmpl: &Tera,
     tmpl_name: &str,
-    ctx: impl Serialize,
-) -> Either<impl Responder, &'static str> {
-    let ctx = match Context::from_serialize(ctx) {
+    raw_ctx: impl Serialize + std::fmt::Debug,
+) -> FResult<HttpResponse> {
+    let ctx = match Context::from_serialize(&raw_ctx) {
+        Ok(v) => v,
+        Err(err) => {
+            error!(
+                "Failed to serialize: {:?} (on template {})- {:?}",
+                &raw_ctx, tmpl_name, err
+            );
+            return Err(FError::SerializationError(err.to_string()));
+        }
+    };
+    let rendered = match get_tmpl().render(&tmpl_name, &ctx) {
         Ok(v) => v,
         Err(err) => {
             error!("Failed to render template {}: {:?}", tmpl_name, err);
-            return Either::B("Internal Server Error");
+            return Err(FError::TemplateError(
+                tmpl_name.to_string(),
+                err.to_string(),
+            ));
         }
     };
-    let rendered = match tmpl.render(&tmpl_name, &ctx) {
-        Ok(v) => v,
-        Err(err) => {
-            error!("Failed to render template {}: {:?}", tmpl_name, err);
-            return Either::B("Internal Server Error");
-        }
-    };
-    Either::A(HttpResponse::Ok().body(rendered))
+    let mut ans = HttpResponse::Ok().body(rendered);
+    ans.headers_mut().insert(
+        actix_web::http::header::CONTENT_TYPE,
+        actix_web::http::HeaderValue::from_static("text/html"),
+    );
+    Ok(ans)
 }

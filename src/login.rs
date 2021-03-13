@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::model::password::PasswordCheck;
+use crate::prelude::*;
 use std::collections::HashSet;
 
 /// Indicates the cookie key that contains the list of active [`FSessionMin`].
@@ -37,11 +37,11 @@ struct LoginPageCtx {
     password: String,
     stage: LoginStage,
     err_msg: String,
-    user: Option<MinUser>
+    user: Option<MinUser>,
 }
 
 #[get("/login")]
-async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
+async fn login_get(req: HttpRequest) -> impl Responder {
     println!(
         "{:?}",
         crate::model::password::Password::load_by_user_uuid(
@@ -64,7 +64,7 @@ async fn login_get(data: web::Data<AppState>, req: HttpRequest) -> impl Responde
         stage: LoginStage::AskUsername,
         user: None,
     };
-    exec_html_template(&data.tmpl, "login.html", ctx)
+    exec_html_template("login.html", ctx)
 }
 
 async fn login_ask_username(
@@ -72,8 +72,8 @@ async fn login_ask_username(
     _input: &web::Form<LoginFormInput>,
     _session: &Session,
     _req: &HttpRequest,
-    ctx: &mut LoginPageCtx
-    ) -> bool {
+    ctx: &mut LoginPageCtx,
+) -> bool {
     let mut tx = get_tx().await;
     if ctx.username.len() == 0 {
         ctx.stage = LoginStage::AskUsername;
@@ -85,16 +85,19 @@ async fn login_ask_username(
                 warn!("User not found: {}", &ctx.username);
                 ctx.err_msg = "User not found".to_string();
             } else {
-                error!("Failed to find user for handle {}: {:?}", &ctx.username, err);
+                error!(
+                    "Failed to find user for handle {}: {:?}",
+                    &ctx.username, err
+                );
                 ctx.err_msg = "Something went wrong. It's not your fault.".to_string();
             }
-            return true
+            return true;
         }
         Ok(user) => {
             ctx.stage = LoginStage::AskPassword;
             ctx.user = Some(user);
             // This allows a script to send both the user and the password at the same time
-            return false
+            return false;
         }
     }
 }
@@ -104,8 +107,8 @@ async fn login_ask_password(
     input: &web::Form<LoginFormInput>,
     _session: &Session,
     _req: &HttpRequest,
-    ctx: &mut LoginPageCtx
-    ) -> bool {
+    ctx: &mut LoginPageCtx,
+) -> bool {
     if ctx.user.is_none() {
         ctx.stage = LoginStage::AskUsername;
         return true;
@@ -117,9 +120,7 @@ async fn login_ask_password(
     };
     if password.len() > 0 {
         let mut tx = get_tx().await;
-        match Password::verify_for_user(user.get_uuid(), &password, &mut tx)
-            .await
-        {
+        match Password::verify_for_user(user.get_uuid(), &password, &mut tx).await {
             Ok(PasswordCheck::WrongPassword) => {
                 ctx.err_msg = "Wrong password.".to_string();
             }
@@ -137,9 +138,8 @@ async fn login_ask_password(
         }
     }
 
-    return true
+    return true;
 }
-
 
 #[post("/login")]
 async fn login_post(
@@ -148,7 +148,6 @@ async fn login_post(
     session: Session,
     req: HttpRequest,
 ) -> impl Responder {
-
     // Load necessary info
     let mut ctx = LoginPageCtx {
         base: BasicCtx::new("Login".to_string(), None, true),
@@ -156,7 +155,7 @@ async fn login_post(
         password: input.password.clone().unwrap_or_default(),
         err_msg: "".to_string(),
         stage: LoginStage::AskUsername,
-        user: None
+        user: None,
     };
     ctx.stage = match session.get::<LoginStage>(COOKIE_LOGIN_STAGE) {
         Ok(Some(v)) => v,
@@ -164,18 +163,22 @@ async fn login_post(
     };
     ctx.user = match session.get::<MinUser>(COOKIE_LOGIN_USER) {
         Ok(Some(v)) => Some(v),
-        _ => None  
+        _ => None,
     };
 
     // Process what we recievd
     let mut ready = false;
     while !ready {
         ready = match ctx.stage {
-            LoginStage::AskUsername => login_ask_username(&data, &input, &session, &req, &mut ctx).await,
-            LoginStage::AskPassword => login_ask_password(&data, &input, &session, &req, &mut ctx).await,
-            _ => unimplemented!()
+            LoginStage::AskUsername => {
+                login_ask_username(&data, &input, &session, &req, &mut ctx).await
+            }
+            LoginStage::AskPassword => {
+                login_ask_password(&data, &input, &session, &req, &mut ctx).await
+            }
+            _ => unimplemented!(),
         };
-    };
+    }
 
     // If finished, create the FSession object
     if ctx.stage == LoginStage::Done {
@@ -187,7 +190,14 @@ async fn login_post(
         let (ip_addr_real, ip_addr_peer) = get_ip(&req);
 
         // Make and save fsession to record the login info
-        let fsession = FSession::new(&user, &user, false, &ip_addr_real, &ip_addr_peer, user_agent);
+        let fsession = FSession::new(
+            &user,
+            &user,
+            false,
+            &ip_addr_real,
+            &ip_addr_peer,
+            user_agent,
+        );
         let mut tx = get_tx().await;
         unwrap_or_log(fsession.save(&mut tx).await, "failed to save fsession");
         unwrap_or_log(tx.commit().await, "failed to save fsession");
@@ -198,7 +208,10 @@ async fn login_post(
             _ => HashSet::new(),
         };
         session_set.insert(fsession.get_uuid());
-        unwrap_or_log(session.set(COOKIE_SESSIONS_LIST, session_set), "failed to set sessions list cookie");
+        unwrap_or_log(
+            session.set(COOKIE_SESSIONS_LIST, session_set),
+            "failed to set sessions list cookie",
+        );
         // Clear values we won't need
         session.remove(COOKIE_LOGIN_STAGE);
         session.remove(COOKIE_LOGIN_USER);
@@ -214,5 +227,5 @@ async fn login_post(
         }
     }
 
-    exec_html_template(&data.tmpl, "login.html", ctx)
+    exec_html_template("login.html", ctx)
 }

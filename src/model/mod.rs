@@ -1,9 +1,9 @@
 pub mod db;
 pub mod password;
 pub mod prelude;
-pub mod user;
 pub mod session;
+pub mod user;
 
 pub use password::Password;
-pub use user::{User, MinUser};
 pub use session::FSession;
+pub use user::{MinUser, User};

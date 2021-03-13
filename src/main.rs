@@ -1,5 +1,6 @@
-mod misc;
+mod errors;
 mod login;
+mod misc;
 mod model;
 mod prelude;
 mod templates;
@@ -9,12 +10,12 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
+use crate::prelude::*;
 use actix_web::middleware::errhandlers::ErrorHandlers;
 use hex::FromHex;
-use crate::prelude::*;
 
 use actix_files as fs;
-use actix_web::{http, App, HttpResponse, HttpServer};
+use actix_web::{http, App, HttpServer};
 use dotenv::dotenv;
 use std::env;
 
@@ -41,24 +42,24 @@ async fn main() -> FResult<()> {
     let db_pass = env::var("DB_PASS").expect("DB_PASS is not set in .env file");
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
-    let cookie_key = <[u8; 32]>::from_hex(env::var("COOKIE_KEY").expect("COOKIE_KEY is not set in .env file")).expect("COOKIE_KEY must be exactly a 32 bytes hex encoded string");
+    let cookie_key =
+        <[u8; 32]>::from_hex(env::var("COOKIE_KEY").expect("COOKIE_KEY is not set in .env file"))
+            .expect("COOKIE_KEY must be exactly a 32 bytes hex encoded string");
 
     unsafe {
         model::db::DB_POOL = Some(db_pool.clone());
         TMPL = Some(templates::load_templates());
     }
 
-
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
-                tmpl: templates::load_templates(),
                 db: db_pool.clone(),
             })
             .wrap(
                 ErrorHandlers::new()
-                    .handler(http::StatusCode::NOT_FOUND, misc::render_404)
-                    .handler(http::StatusCode::INTERNAL_SERVER_ERROR, misc::render_500),
+                    .handler(http::StatusCode::NOT_FOUND, errors::render_404)
+                    .handler(http::StatusCode::INTERNAL_SERVER_ERROR, errors::render_500),
             )
             // add cookies
             .wrap(
@@ -72,8 +73,8 @@ async fn main() -> FResult<()> {
             .service(login::login_get)
             .service(login::login_post)
             .service(misc::debug_get)
-            .service(misc::panic_get)
-            .service(misc::error_get)
+            .service(errors::panic_get)
+            .service(errors::error_get)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

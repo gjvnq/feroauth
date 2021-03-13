@@ -1,9 +1,9 @@
-use chrono::Duration;
 use crate::model::prelude::*;
 use crate::model::user::MinUser;
+use chrono::Duration;
 
-const SESSION_LIFE_SHORT: i64 = 15*60; // 15 min
-const SESSION_LIFE_LONG: i64 = 15*24*3600; // 15 days
+const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
+const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
 
 #[derive(Debug, sqlx::FromRow)]
 // provisory pub
@@ -17,7 +17,7 @@ pub struct FSessionRaw {
     ip_addr_real: Vec<u8>,
     ip_addr_peer: Vec<u8>,
     user_agent: String,
-    data: String
+    data: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ struct FSessionInner {
 // This is stored on the cookie itself
 struct FSessionMin {
     uuid: Uuid,
-    user: MinUser
+    user: MinUser,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,23 +43,23 @@ pub struct FSession {
     remember_me: bool,
     ip_addr_real: String,
     ip_addr_peer: String,
-    user_agent: String
+    user_agent: String,
 }
 
 impl FSession {
     #[allow(unused)]
     pub fn get_uuid(&self) -> Uuid {
-        return self.uuid
+        return self.uuid;
     }
 
     #[allow(unused)]
     pub fn get_user(&self) -> &MinUser {
-        return &self.user
+        return &self.user;
     }
 
     #[allow(unused)]
     pub fn get_real_user(&self) -> &MinUser {
-        return &self.real_user
+        return &self.real_user;
     }
 
     #[allow(unused)]
@@ -68,13 +68,20 @@ impl FSession {
             true => Duration::seconds(SESSION_LIFE_LONG),
             false => Duration::seconds(SESSION_LIFE_SHORT),
         };
-        return self.last_used.clone() + duration
+        return self.last_used.clone() + duration;
     }
 
     #[allow(unused)]
-    pub fn new(user: &MinUser, real_user: &MinUser, remember_me: bool, ip_addr_real: &str, ip_addr_peer: &str, user_agent: &str) -> FSession {
+    pub fn new(
+        user: &MinUser,
+        real_user: &MinUser,
+        remember_me: bool,
+        ip_addr_real: &str,
+        ip_addr_peer: &str,
+        user_agent: &str,
+    ) -> FSession {
         let now = Utc::now();
-        FSession{
+        FSession {
             uuid: Uuid::new_v4(),
             user: user.clone(),
             real_user: real_user.clone(),
@@ -83,11 +90,11 @@ impl FSession {
             user_agent: user_agent.to_string(),
             login_time: now,
             last_used: now,
-            remember_me: remember_me
+            remember_me: remember_me,
         }
     }
 
-    /// If `refresh` is true (as it almost always should), the session's valid until time will be extended if needed. 
+    /// If `refresh` is true (as it almost always should), the session's valid until time will be extended if needed.
     #[allow(unused)]
     pub async fn load_by_uuid(
         uuid: Uuid,
@@ -106,10 +113,7 @@ impl FSession {
     }
 
     #[allow(unused)]
-    pub async fn save(
-        &self,
-        tx: &mut Transaction<'_>,
-    ) -> FResult<()> {
+    pub async fn save(&self, tx: &mut Transaction<'_>) -> FResult<()> {
         trace!("Saving session {:?}", self.uuid);
         let row = sqlx::query!(
             "INSERT INTO `sessions` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
