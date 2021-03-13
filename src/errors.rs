@@ -19,14 +19,14 @@ fn safe_html_template(tmpl_name: &str, raw_ctx: impl Serialize + std::fmt::Debug
                 "Failed to serialize: {:?} (on template {})- {:?}",
                 &raw_ctx, tmpl_name, err
             );
-            return "Internal Server Error".to_string();
+            return "<h1>Internal Server Error</h1>".to_string();
         }
     };
     let rendered = match get_tmpl().render(&tmpl_name, &ctx) {
         Ok(v) => v,
         Err(err) => {
             error!("Failed to render template {}: {:?}", tmpl_name, err);
-            return "Internal Server Error".to_string();
+            return "<h1>Internal Server Error</h1>".to_string();
         }
     };
     rendered
@@ -59,30 +59,32 @@ impl ErrorCtx {
     }
 }
 
-pub fn render_404<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHandlerResponse<B>> {
+pub fn render_error_html<B>(res: ServiceResponse<B>, code: i32) -> actix_web::Result<ErrorHandlerResponse<B>> {
+    let title = match code {
+        404 => "Not Found",
+        _ => "Internal Server Error"
+    }.to_string();
+
+    // Replace the responde with the HTML template we want
     let mut new_res: ServiceResponse<B> = res.map_body(|_head, _body| {
         let html = safe_html_template(
             "error.html",
-            ErrorCtx::new("Page Not Found".to_string(), None, 404),
+            ErrorCtx::new(title, None, code),
         );
         ResponseBody::Other(Body::Bytes(Bytes::from(html)))
     });
+    // Ensure the browser will render this as HTML
     new_res
         .headers_mut()
         .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
+    // We don't set any header for the error code because the middleware already does this for us
     Ok(ErrorHandlerResponse::Response(new_res))
 }
 
+pub fn render_404<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHandlerResponse<B>> {
+    render_error_html(res, 404)
+}
+
 pub fn render_500<B>(res: ServiceResponse<B>) -> actix_web::Result<ErrorHandlerResponse<B>> {
-    let mut new_res: ServiceResponse<B> = res.map_body(|_head, _body| {
-        let html = safe_html_template(
-            "error.html",
-            ErrorCtx::new("Internal Server Error".to_string(), None, 500),
-        );
-        ResponseBody::Other(Body::Bytes(Bytes::from(html)))
-    });
-    new_res
-        .headers_mut()
-        .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
-    Ok(ErrorHandlerResponse::Response(new_res))
+    render_error_html(res, 500)
 }
