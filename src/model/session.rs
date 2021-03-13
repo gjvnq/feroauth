@@ -14,7 +14,8 @@ pub struct FSessionRaw {
     login_time: DateTime<Utc>,
     last_used: DateTime<Utc>,
     remember_me: bool,
-    ip_addr: String,
+    ip_addr_real: Vec<u8>,
+    ip_addr_peer: Vec<u8>,
     user_agent: String,
     data: String
 }
@@ -40,7 +41,8 @@ pub struct FSession {
     login_time: DateTime<Utc>,
     last_used: DateTime<Utc>,
     remember_me: bool,
-    ip_addr: IpAddr,
+    ip_addr_real: String,
+    ip_addr_peer: String,
     user_agent: String
 }
 
@@ -70,13 +72,14 @@ impl FSession {
     }
 
     #[allow(unused)]
-    pub fn new(user: &MinUser, real_user: &MinUser, remember_me: bool, ip_addr: IpAddr, user_agent: &str) -> FSession {
+    pub fn new(user: &MinUser, real_user: &MinUser, remember_me: bool, ip_addr_real: &str, ip_addr_peer: &str, user_agent: &str) -> FSession {
         let now = Utc::now();
         FSession{
             uuid: Uuid::new_v4(),
             user: user.clone(),
             real_user: real_user.clone(),
-            ip_addr: ip_addr,
+            ip_addr_real: ip_addr_real.to_string(),
+            ip_addr_peer: ip_addr_peer.to_string(),
             user_agent: user_agent.to_string(),
             login_time: now,
             last_used: now,
@@ -94,7 +97,7 @@ impl FSession {
         trace!("Loading session {:?}", uuid);
         let row = sqlx::query_as_unchecked!(
             FSessionRaw,
-            "SELECT `uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr`, `user_agent`, `data` FROM `sessions` WHERE `uuid` = ?",
+            "SELECT `uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data` FROM `sessions` WHERE `uuid` = ?",
             uuid
         )
         .fetch_one(&mut *tx)
@@ -109,14 +112,15 @@ impl FSession {
     ) -> FResult<()> {
         trace!("Saving session {:?}", self.uuid);
         let row = sqlx::query!(
-            "INSERT INTO `sessions` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}')",
+            "INSERT INTO `sessions` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
             self.uuid,
             self.user.get_uuid(),
             self.real_user.get_uuid(),
             self.login_time,
             self.last_used,
             self.remember_me,
-            self.ip_addr.to_string(),
+            self.ip_addr_real,
+            self.ip_addr_peer,
             self.user_agent
         )
         .execute(&mut *tx)

@@ -27,9 +27,24 @@ pub use argonautica::Error as ArgoError;
 
 pub use crate::model::db::get_tx;
 pub use crate::model::{FSession, MinUser};
-pub use crate::templates::{exec_html_template, BasicCtx};
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
+
+/// Unwraps [`Result`] and returns the inner value or logs the error and panic
+#[inline]
+#[track_caller]
+#[allow(unused)]
+pub fn unwrap_or_log<T,E: std::fmt::Debug>(input: Result<T,E>, msg: &str) -> T {
+    use std::panic::Location;
+    match input {
+        Ok(val) => val,
+        Err(ref err) => {
+            let loc = Location::caller();
+            error!("{file}:{line}:{col} {msg}: {err:?}", file=loc.file(), line=loc.line(), col=loc.column(), msg=msg, err=err);
+            input.unwrap()
+        },
+    }
+}
 
 #[derive(Debug)]
 pub enum InvalidValue {
@@ -67,39 +82,19 @@ impl FError {
     }
 }
 
-/// Unwraps [`Result`] and returns the inner value or logs the error and panic
-#[inline]
-#[track_caller]
-#[allow(unused)]
-pub fn unwrap_or_log<T,E: std::fmt::Debug>(input: Result<T,E>, msg: &str) -> T {
-    use std::panic::Location;
-    match input {
-        Ok(val) => val,
-        Err(ref err) => {
-            let loc = Location::caller();
-            error!("{file}:{line}:{col} {msg}: {err:?}", file=loc.file(), line=loc.line(), col=loc.column(), msg=msg, err=err);
-            input.unwrap()
-        },
-    }
-}
-
 impl std::fmt::Display for FError {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        todo!()
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        fmt.write_fmt(format_args!("{:?}", self))
     }
 }
 
 impl actix_web::error::ResponseError for FError {
-    fn error_response(&self) -> HttpResponse<ActixWebBody> {
-        let mut resp = HttpResponse::new(self.status_code());
-        resp.headers_mut().insert(
-            httpHeader::CONTENT_TYPE,
-            httpHeader::HeaderValue::from_static("text/plain; charset=utf-8"),
-        );
-        resp.set_body(ActixWebBody::from("Something went wrong"))
-    }
     fn status_code(&self) -> actix_web::http::StatusCode {
-        actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        if self.is_not_found() {
+            actix_web::http::StatusCode::NOT_FOUND
+        } else {
+            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 

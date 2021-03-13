@@ -1,3 +1,4 @@
+mod misc;
 mod login;
 mod model;
 mod prelude;
@@ -8,11 +9,12 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
+use actix_web::middleware::errhandlers::ErrorHandlers;
 use hex::FromHex;
 use crate::prelude::*;
 
 use actix_files as fs;
-use actix_web::{App, HttpResponse, HttpServer};
+use actix_web::{http, App, HttpResponse, HttpServer};
 use dotenv::dotenv;
 use std::env;
 
@@ -43,7 +45,9 @@ async fn main() -> FResult<()> {
 
     unsafe {
         model::db::DB_POOL = Some(db_pool.clone());
+        TMPL = Some(templates::load_templates());
     }
+
 
     let mut server = HttpServer::new(move || {
         App::new()
@@ -51,6 +55,11 @@ async fn main() -> FResult<()> {
                 tmpl: templates::load_templates(),
                 db: db_pool.clone(),
             })
+            .wrap(
+                ErrorHandlers::new()
+                    .handler(http::StatusCode::NOT_FOUND, misc::render_404)
+                    .handler(http::StatusCode::INTERNAL_SERVER_ERROR, misc::render_500),
+            )
             // add cookies
             .wrap(
                 CookieSession::signed(&cookie_key)
@@ -62,7 +71,9 @@ async fn main() -> FResult<()> {
             .service(index)
             .service(login::login_get)
             .service(login::login_post)
-            .service(login::debug_get)
+            .service(misc::debug_get)
+            .service(misc::panic_get)
+            .service(misc::error_get)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

@@ -22,9 +22,31 @@ impl BasicCtx {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EmptyCtx {
+    pub base: BasicCtx
+}
+
+impl EmptyCtx {
+    pub fn new(title: String, desc: Option<String>, no_vue: bool) -> EmptyCtx {
+        EmptyCtx {
+            base: BasicCtx::new(title, desc, no_vue)
+        }
+    }
+}
+
 pub fn load_templates() -> Tera {
     Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*.html"))
         .expect("Failed to load templates")
+}
+
+pub fn basic_html_template(
+    tmpl_name: &str,
+    ctx: impl Serialize,
+) -> String {
+    let ctx = Context::from_serialize(ctx).map_err(|err| error!("Failed to render template {}: {:?}", tmpl_name, err)).unwrap();
+    let rendered = get_tmpl().render(&tmpl_name, &ctx).map_err(|err| error!("Failed to render template {}: {:?}", tmpl_name, err)).unwrap();
+    rendered
 }
 
 pub fn exec_html_template(
