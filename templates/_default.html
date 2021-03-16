@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TITLE</title>
+    <meta name="description" content="DESC">
+    <link href="../static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../static/css/bootstrap-icons.css" rel="preload" as="style">
+    <link href="../static/css/base.css" rel="stylesheet">
+    <script defer src="/static/js/bootstrap.min.js"></script>
+<!--     {%- block head -%}
+    {%- endblock head %} -->
+  </head>
+  <body>
+    <nav id="main-nav" class="navbar-dark bg-dark">
+        <div class="navbar-nav">
+            <a class="nav-link active" aria-current="page" href="#">Home</a>
+            <a class="nav-link" href="#">Users</a>
+            <a class="nav-link" href="#">Groups</a>
+            <a class="nav-link" href="#">Permissions</a>
+            <a class="nav-link" href="#">Apps</a>
+            <!-- <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Disabled</a> -->
+        </div>
+    </nav>
+    <main id="main">
+        {% block content %}{% endblock content %}
+    </main>
+    <footer id="main-footer" class="bg-light">
+        footer
+    </footer>
+  </body>
+</html>

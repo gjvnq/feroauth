@@ -2,3 +2,27 @@ html, body {
   height: 100%;
 }
 
+body {
+	display: grid;
+	grid-template-columns: 200px auto;
+	grid-template-rows: auto 40px;
+}
+
+body > nav#main-nav {
+	padding: 10px;
+}
+
+body > main#main {
+	padding: 10px;
+}
+
+body > footer#main-footer {
+	grid-column-start: 1;
+	grid-column-end: 3;
+	padding: 10px;
+    font-size: .875rem;
+    color: #63707c;
+    text-align: center;
+    border-top: 1px #d8d9da solid;
+    background-color: #f8f9fa;
+}
