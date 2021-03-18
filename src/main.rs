@@ -11,6 +11,7 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
+use std::str::FromStr;
 use crate::prelude::*;
 use hex::FromHex;
 
@@ -49,12 +50,25 @@ async fn main() -> FResult<()> {
         model::db::DB_POOL = Some(db_pool.clone());
     }
 
-    let rng = ring::rand::SystemRandom::new();
-    let pkcs8_bytes = ring::signature::EcdsaKeyPair::generate_pkcs8(&ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+    let ecg = openssl::ec::EcGroup::from_curve_name(openssl::nid::Nid::X9_62_PRIME256V1).unwrap();
+    let key2 = openssl::ec::EcKey::generate(&ecg).unwrap();
+    debug!("JWT key: {:?}", key2);
+    let pri_pem = key2.private_key_to_pem().unwrap();
+    let pub_pem = key2.public_key_to_pem().unwrap();
+    debug!("JWT key pri: {}", std::str::from_utf8(&pri_pem).unwrap());
+    debug!("JWT key pub: {}", std::str::from_utf8(&pub_pem).unwrap());
+    let key3 = openssl::pkey::PKey::from_ec_key(key2).unwrap();
+    debug!("JWT key: {:?}", key3);
+    let pri_pem2 = key3.private_key_to_pem_pkcs8().unwrap();
+    let pub_pem2 = key3.public_key_to_pem().unwrap();
+    debug!("JWT key2 pri: {}", std::str::from_utf8(&pri_pem2).unwrap());
+    debug!("JWT key2 pub: {}", std::str::from_utf8(&pub_pem2).unwrap());
+    // EC P-256 DSA with SHA-256
+    // X9_62_PRIME256V1
 
-    let enc_key = jsonwebtoken::EncodingKey::from_ec_der(pkcs8_bytes.as_ref());
-    let dec_key = jsonwebtoken::DecodingKey::from_ec_der(pkcs8_bytes.as_ref()).into_static();
-    debug!("JWT key: {}", base64::encode(pkcs8_bytes.as_ref()));
+    let enc_key = jsonwebtoken::EncodingKey::from_ec_pem(&pri_pem2).unwrap();
+    let dec_key = jsonwebtoken::DecodingKey::from_ec_pem(&pub_pem2).unwrap().into_static();
+    debug!("enc_key: {:?}", enc_key);
     info!("Public  JWT key: {:?}", dec_key);
 
     set_jwt_config(JwtConfig{
