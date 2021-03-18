@@ -18,12 +18,25 @@ pub struct Password {
     last_used: Option<DateTime<Utc>>,
 }
 
-impl Password {
-    #[allow(unused)]
-    pub fn new(user_uuid: Uuid, cleartext: String, requires_2fa: bool) -> FResult<Password> {
-        let cleartext = cleartext.trim();
+impl<'a> Password {
+    fn new_argon2_hasher() -> argonautica::Hasher<'a> {
         let mut hasher = argonautica::Hasher::default();
-        hasher.opt_out_of_secret_key(true);
+        println!("{:?}", hasher);
+        hasher
+            .configure_backend(argonautica::config::Backend::C)
+            .configure_lanes(2)
+            .configure_hash_len(16)
+            .configure_memory_size(4096)
+            .configure_variant(argonautica::config::Variant::Argon2id)
+            .opt_out_of_secret_key(true)
+            .configure_iterations(32);
+        hasher
+    }
+
+    #[allow(unused)]
+    pub fn new(user_uuid: Uuid, cleartext: &str, requires_2fa: bool) -> FResult<Password> {
+        let cleartext = cleartext.trim();
+        let mut hasher = Password::new_argon2_hasher();
         let hash = hasher.with_password(cleartext).hash()?;
         Ok(Password {
             uuid: Uuid::new_v4(),
@@ -36,19 +49,31 @@ impl Password {
         })
     }
 
-    pub fn verify(&self, cleartext: &str) -> FResult<PasswordCheck> {
+    pub async fn verify_and_mark(&self, cleartext: &str, tx: &mut Transaction<'_>) -> FResult<PasswordCheck> {
+        let ans = self.just_verify(cleartext)?;
+        if ans != PasswordCheck::WrongPassword {
+            let time = Utc::now();
+            sqlx::query!(
+                "UPDATE `password` SET `last_used` = ? WHERE `uuid` = ? AND (`last_used` IS NULL OR `last_used` <= ?)",
+                time, self.uuid, time
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        Ok(ans)
+    }
+
+    pub fn just_verify(&self, cleartext: &str) -> FResult<PasswordCheck> {
         let cleartext = cleartext.trim();
         let mut verifier = argonautica::Verifier::default();
         let ok = verifier
             .with_hash(&self.hash)
             .with_password(cleartext)
             .verify()?;
-        match ok {
-            false => Ok(PasswordCheck::WrongPassword),
-            true => match self.requires_2fa {
-                false => Ok(PasswordCheck::RightNo2FA),
-                true => Ok(PasswordCheck::RightNeeds2FA),
-            },
+        match (ok, self.requires_2fa) {
+            (false, _) => Ok(PasswordCheck::WrongPassword),
+            (true, false) => Ok(PasswordCheck::RightNo2FA),
+            (true, true) => Ok(PasswordCheck::RightNeeds2FA),
         }
     }
 
@@ -76,7 +101,7 @@ impl Password {
         let passes = Password::load_by_user_uuid(user_uuid, tx).await?;
         let mut best_answer = PasswordCheck::WrongPassword;
         for pass in passes {
-            match pass.verify(cleartext) {
+            match pass.verify_and_mark(cleartext, tx).await {
                 Ok(ans) => {
                     if ans == PasswordCheck::RightNo2FA {
                         return Ok(ans);

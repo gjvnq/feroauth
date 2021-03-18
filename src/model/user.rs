@@ -22,15 +22,13 @@ pub struct MinUser {
     uuid: Uuid,
     pub display_name: String,
     pub handle: String,
+    // TODO: add groups?
 }
 
 impl MinUser {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
-
-    #[allow(unused)]
-    pub fn mark_last_login(&self, tx: &mut Transaction<'_>) {}
 
     #[allow(unused)]
     pub async fn load_by_login_handle(
@@ -64,6 +62,16 @@ impl std::convert::From<User> for MinUser {
 }
 
 impl User {
+    pub(crate) async fn mark_last_login(uuid: Uuid, time: DateTime<Utc>, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!(
+            "UPDATE `user` SET `last_login` = ? WHERE `uuid` = ? AND (`last_login` IS NULL OR `last_login` <= ?)",
+            time, uuid, time
+        )
+        .execute(&mut *tx)
+        .await?;
+        Ok(())
+    }
+
     pub fn to_min_user(&self) -> MinUser {
         MinUser {
             uuid: self.uuid,
@@ -148,13 +156,41 @@ impl User {
         // Remove trouble making whitespace
         let login_handle = login_handle.trim();
         trace!("Loading user {:?}", login_handle);
-
-        let row: (Uuid,) = sqlx::query_as(
-            "SELECT `user_uuid` as `uuid` FROM `login_handle` WHERE `login_handle` = ?",
+        
+        let base_row = sqlx::query!(
+            "SELECT `user`.`uuid`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
+            login_handle
         )
-        .bind(login_handle)
         .fetch_one(&mut *tx)
         .await?;
-        User::load_by_uuid(row.0, tx).await
+        println!("{:?}", base_row);
+
+        let uuid = parse_uuid_vec(base_row.uuid)?;
+        let handle_row = sqlx::query!(
+            "SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?",
+            uuid
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        println!("{:?}", handle_row);
+
+        let mut handles = vec![];
+        for handle in handle_row {
+            handles.push(LoginHandle {
+                handle: handle.login_handle,
+                kind: handle.kind,
+            })
+        }
+
+        Ok(User {
+            uuid: uuid,
+            display_name: base_row.display_name,
+            added: Utc.from_utc_datetime(&base_row.added),
+            last_login: base_row
+                .last_login
+                .as_ref()
+                .map(|dt| Utc.from_utc_datetime(dt)),
+            login_handles: handles,
+        })
     }
 }

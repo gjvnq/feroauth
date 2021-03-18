@@ -1,5 +1,5 @@
 use crate::model::prelude::*;
-use crate::model::user::MinUser;
+use crate::model::user::{User,MinUser};
 use chrono::Duration;
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
@@ -46,6 +46,18 @@ pub struct FSession {
     user_agent: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionClaims {
+    /// Session UUID
+    pub sid: Uuid,
+    pub iat: i64,
+    pub exp: i64,
+    pub user: MinUser,
+    pub real_user: MinUser,
+    pub auth_time: i64
+}
+
+
 impl FSession {
     #[allow(unused)]
     pub fn get_uuid(&self) -> Uuid {
@@ -63,7 +75,7 @@ impl FSession {
     }
 
     #[allow(unused)]
-    pub fn get_valid_until(&self) -> DateTime<Utc> {
+    pub fn valid_until(&self) -> DateTime<Utc> {
         let duration = match self.remember_me {
             true => Duration::seconds(SESSION_LIFE_LONG),
             false => Duration::seconds(SESSION_LIFE_SHORT),
@@ -114,8 +126,8 @@ impl FSession {
 
     #[allow(unused)]
     pub async fn save(&self, tx: &mut Transaction<'_>) -> FResult<()> {
-        trace!("Saving session {:?}", self.uuid);
-        let row = sqlx::query!(
+        trace!("Saving session {:?}", self.get_uuid());
+        sqlx::query!(
             "INSERT INTO `sessions` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
             self.uuid,
             self.user.get_uuid(),
@@ -129,6 +141,21 @@ impl FSession {
         )
         .execute(&mut *tx)
         .await?;
+        User::mark_last_login(self.user.get_uuid(), self.login_time, tx).await?;
+
         Ok(())
+    }
+
+    pub fn to_claims(&self) -> SessionClaims {
+        let now = Utc::now();
+        SessionClaims {
+            /// Session UUID
+            sid: self.uuid,
+            iat: now.timestamp(),
+            exp: self.valid_until().timestamp(),
+            user: self.user.clone(),
+            real_user: self.real_user.clone(),
+            auth_time: self.login_time.timestamp()
+        }
     }
 }

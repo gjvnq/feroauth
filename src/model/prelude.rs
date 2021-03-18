@@ -4,6 +4,7 @@ pub use std::io::Error as IOError;
 pub use std::io::ErrorKind as IOErrorKind;
 pub use std::io::Result as IOResult;
 
+use std::sync::{RwLock, Arc};
 pub use std::net::IpAddr;
 
 pub use serde::{Deserialize, Serialize};
@@ -21,6 +22,11 @@ pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
 pub use actix_session::{CookieSession, Session};
 
+use jsonwebtoken::encode as jwt_encode;
+use jsonwebtoken::errors::Error as JwtError;
+pub use jsonwebtoken::Header as JwtHeader;
+pub use jsonwebtoken::Algorithm as JwtAlgorithm;
+
 pub use qstring::QString;
 
 pub use argonautica::Error as ArgoError;
@@ -29,6 +35,19 @@ pub use crate::model::db::get_tx;
 pub use crate::model::{FSession, MinUser};
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
+
+#[derive(Debug, Clone, Default)]
+pub struct JwtConfig<'a> {
+    pub alg: Option<JwtAlgorithm>,
+    pub kid: String,
+    pub jku: String,
+    pub enc_key: Option<jsonwebtoken::EncodingKey>,
+    pub dec_key: Option<jsonwebtoken::DecodingKey<'a>>
+}
+
+lazy_static! {
+    pub static ref JWT_CONFIG: RwLock<JwtConfig<'static>> = RwLock::new(Default::default());
+}
 
 /// Unwraps [`Result`] and returns the inner value or logs the error and panic
 #[inline]
@@ -68,6 +87,8 @@ pub enum FError {
     UuidParseError(String),
     ArgoError(ArgoError),
     NotImplemented,
+    JwtError(JwtError),
+    FauxPanic(&'static str, Option<String>)
 }
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -120,6 +141,12 @@ impl std::convert::From<ArgoError> for FError {
     }
 }
 
+impl std::convert::From<JwtError> for FError {
+    fn from(err: JwtError) -> Self {
+        FError::JwtError(err)
+    }
+}
+
 #[allow(unused)]
 pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     match Uuid::parse_str(&val) {
@@ -133,4 +160,56 @@ pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
         Ok(v) => Ok(v),
         Err(_) => Err(FError::UuidParseError(format!("{:?}", val))),
     }
+}
+
+// lazy_static! {
+//     pub static ref JWT_CONFIG: RwLock<Option<JwtConfig<'static>>> = RwLock::new(None);
+// }
+
+// fn get_jwt_config<'a>() -> FResult<JwtConfig> {
+//     unsafe {
+//         if JWT_CONFIG.is_none() {
+//             return Err(FError::NotAvaialble("JWT header not configured".to_string()))
+//         }
+//         if let Ok(val) = &JWT_CONFIG.unwrap().try_read() {
+//             return Ok(val.my_clone())
+//         } else {
+//             return Err(FError::NotAvaialble("JWT config not readable".to_string()))
+//         }
+//     }
+// }
+
+pub fn set_jwt_config(new: JwtConfig<'static>) -> FResult<()> {
+    let mut cfg = match JWT_CONFIG.try_write() {
+        Ok(cfg) => cfg,
+        _ => return Err(FError::FauxPanic("JWT config not writable", None))
+    };
+    cfg.alg = new.alg.clone();
+    cfg.kid = new.kid.clone();
+    cfg.jku = new.jku.clone();
+    cfg.enc_key = new.enc_key.clone();
+    cfg.dec_key = new.dec_key.clone();
+
+    Ok(())
+}
+
+pub fn new_jwt(claims: impl Serialize) -> FResult<String> {
+    let cfg = JWT_CONFIG.try_read();
+    if cfg.is_err() {
+        return Err(FError::FauxPanic("JWT config not readable", None));
+    }
+    let cfg = cfg.unwrap();
+    let alg = match cfg.alg {
+        Some(v) => v,
+        _ => return Err(FError::FauxPanic("JWT config missing alg", None))
+    };
+    let enc_key = match &cfg.enc_key {
+        Some(v) => v,
+        _ => return Err(FError::FauxPanic("JWT config missing enc_key", None))
+    };
+
+    let mut header = JwtHeader::new(alg);
+    header.kid = Some(cfg.kid.clone());
+    header.jku = Some(cfg.jku.clone());
+    Ok(jwt_encode(&header, &claims, &enc_key)?)
 }

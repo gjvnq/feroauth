@@ -1,9 +1,10 @@
-mod errors;
-mod login;
 mod misc;
+mod users;
 mod model;
 mod prelude;
-mod templates;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 extern crate actix_web;
@@ -11,10 +12,8 @@ extern crate log;
 extern crate serde_json;
 
 use crate::prelude::*;
-use actix_web::middleware::errhandlers::ErrorHandlers;
 use hex::FromHex;
 
-use actix_files as fs;
 use actix_web::{http, App, HttpServer};
 use dotenv::dotenv;
 use std::env;
@@ -48,19 +47,35 @@ async fn main() -> FResult<()> {
 
     unsafe {
         model::db::DB_POOL = Some(db_pool.clone());
-        TMPL = Some(templates::load_templates());
     }
+
+    let rng = ring::rand::SystemRandom::new();
+    let pkcs8_bytes = ring::signature::EcdsaKeyPair::generate_pkcs8(&ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+
+    let enc_key = jsonwebtoken::EncodingKey::from_ec_der(pkcs8_bytes.as_ref());
+    let dec_key = jsonwebtoken::DecodingKey::from_ec_der(pkcs8_bytes.as_ref()).into_static();
+    debug!("JWT key: {}", base64::encode(pkcs8_bytes.as_ref()));
+    info!("Public  JWT key: {:?}", dec_key);
+
+    set_jwt_config(JwtConfig{
+        alg: Some(JwtAlgorithm::ES256),
+        kid: "".to_string(),
+        jku: "".to_string(),
+        enc_key: Some(enc_key),
+        dec_key: Some(dec_key)
+    })?;
+
+    let p = Password::new(Uuid::new_v4(), "admin", false);
+    println!("{:?}", p);
+    let t = Utc::now().timestamp_millis();
+    println!("{:?}", p.unwrap().just_verify("admin"));
+    println!("{}", Utc::now().timestamp_millis()-t);
 
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
                 db: db_pool.clone(),
             })
-            .wrap(
-                ErrorHandlers::new()
-                    .handler(http::StatusCode::NOT_FOUND, errors::render_404)
-                    .handler(http::StatusCode::INTERNAL_SERVER_ERROR, errors::render_500),
-            )
             // add cookies
             .wrap(
                 CookieSession::signed(&cookie_key)
@@ -68,20 +83,15 @@ async fn main() -> FResult<()> {
                     .http_only(true)
                     .secure(false),
             )
-            .service(fs::Files::new("/static", "static").prefer_utf8(true))
             .service(index)
-            .service(login::login_get)
-            .service(login::login_post)
-            .service(misc::debug_get)
-            .service(errors::panic_get)
-            .service(errors::error_get)
+            .service(users::login)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");
     let port = env::var("PORT").expect("PORT is not set in .env file");
     server = server.bind(format!("{}:{}", host, port))?;
 
-    info!("Starting server");
+    info!("Starting server on {}:{}", host, port);
     server.run().await?;
 
     Ok(())

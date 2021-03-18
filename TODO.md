@@ -1,5 +1,7 @@
-- [ ] Separate client from "api"
+- [ ] Generate keypair
+- [ ] "Publish" public key automatically
 - [ ] Use JWTs for authentication (use local storage)
+- [ ] Separate client from "api"
 
 
 - [ ] User selection (when multiple logged in)
