@@ -65,6 +65,7 @@ async fn main() -> FResult<()> {
             )
             .service(index)
             .service(jwt::keys_endpoint)
+            .service(jwt::validate_endpoint)
             .service(users::login_endpoint)
     });
 

@@ -134,7 +134,7 @@ async fn login_endpoint(
         session.save(&mut tx).await?;
         tx.commit().await?;
 
-        ans.jwt = Some(data.jwt.issue(session.to_claims())?);
+        ans.jwt = Some(data.jwt.encode(session.to_claims())?);
 
         debug!(
             "{} - Finished login for {:?}",

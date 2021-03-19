@@ -1,14 +1,18 @@
+use crate::model::session::SessionClaims;
 use crate::prelude::*;
+use jsonwebtoken::decode as jwt_decode;
 use jsonwebtoken::encode as jwt_encode;
 use jsonwebtoken::Header as JwtHeader;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use jsonwebtoken::{DecodingKey, EncodingKey, TokenData, Validation};
 use openssl::bn::{BigNum, BigNumContext};
 use openssl::ec::{EcGroup, EcKey};
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use ring::digest::{digest, SHA256};
+use serde::de::DeserializeOwned;
 
-const DEFAULT_JWT_ALG: JwtAlgorithm = JwtAlgorithm::ES256;
+const JWT_DEFAULT_ALG: JwtAlgorithm = JwtAlgorithm::ES256;
+const JWT_DEFAULT_LEEWAY: u64 = 30;
 
 #[post("/keys")]
 async fn keys_endpoint(data: web::Data<AppState<'_>>, _req: HttpRequest) -> FResult<String> {
@@ -27,6 +31,7 @@ pub struct JwtMaker<'a> {
     dec_key: DecodingKey<'a>,
     dec_jwk: String,
     dec_pem: String,
+    validator: Validation,
 }
 
 fn alg2nid(alg: JwtAlgorithm) -> FResult<Nid> {
@@ -34,10 +39,7 @@ fn alg2nid(alg: JwtAlgorithm) -> FResult<Nid> {
         JwtAlgorithm::ES256 => Ok(Nid::X9_62_PRIME256V1),
         JwtAlgorithm::ES384 => Ok(Nid::SECP384R1),
         // JwtAlgorithm::ES521 => Ok(Nid::SECP521R1),
-        _ => Err(FError::FauxPanic(
-            "umimplemented JWT Algorithm",
-            Some(format!("{:?}", alg)),
-        )),
+        _ => Err(FError::new_faux_panic_3("umimplemented JWT Algorithm", alg)),
     }
 }
 
@@ -47,10 +49,7 @@ fn nid2crv(nid: Nid) -> FResult<&'static str> {
         Nid::SECP256K1 => Ok("P-256"),
         Nid::SECP384R1 => Ok("P-384"),
         Nid::SECP521R1 => Ok("P-512"), // not tested
-        _ => Err(FError::FauxPanic(
-            "umimplemented NID",
-            Some(format!("{:?}", nid)),
-        )),
+        _ => Err(FError::new_faux_panic_3("unsupported NID", nid)),
     }
 }
 
@@ -60,9 +59,8 @@ fn ec_key2jwk<T: openssl::pkey::HasPublic>(ec_key: &EcKey<T>) -> FResult<String>
     let crv = match ec_group.curve_name() {
         Some(v) => v,
         None => {
-            return Err(FError::FauxPanic(
+            return Err(FError::new_faux_panic_1(
                 "failed to compute key thumbprint: EcGroup.curve_name() returned None",
-                None,
             ))
         }
     };
@@ -90,7 +88,7 @@ fn compute_sha256_base64(val: &str) -> String {
 
 impl JwtMaker<'_> {
     pub fn new<'a>() -> FResult<JwtMaker<'a>> {
-        JwtMaker::new_alg(DEFAULT_JWT_ALG)
+        JwtMaker::new_alg(JWT_DEFAULT_ALG)
     }
 
     pub fn new_alg<'a>(alg: JwtAlgorithm) -> FResult<JwtMaker<'a>> {
@@ -111,15 +109,16 @@ impl JwtMaker<'_> {
         let dec_jwk = ec_key2jwk(&ec_key)?;
         let dec_pem = match std::str::from_utf8(&pem_public) {
             Ok(v) => v,
-            Err(err) => {
-                return Err(FError::FauxPanic(
-                    "failed to load PEM string",
-                    Some(format!("{:?}", err)),
-                ))
-            }
+            Err(err) => return Err(FError::new_faux_panic_3("failed to load PEM string", err)),
         };
 
         let kid = compute_sha256_base64(&dec_jwk);
+
+        let validator = Validation {
+            leeway: JWT_DEFAULT_LEEWAY,
+            algorithms: vec![alg],
+            ..Default::default()
+        };
 
         let ans = JwtMaker {
             alg: alg,
@@ -129,10 +128,10 @@ impl JwtMaker<'_> {
             dec_key: dec_key,
             dec_jwk: dec_jwk,
             dec_pem: dec_pem.to_string(),
+            validator: validator,
         };
-        if let Err(err) = ans.issue("hi") {
-            let msg = format!("{:?}", err);
-            return Err(FError::FauxPanic("failed to issue test token", Some(msg)));
+        if let Err(err) = ans.encode("hi") {
+            return Err(FError::new_faux_panic_3("failed to encode test token", err));
         }
         Ok(ans)
     }
@@ -145,10 +144,42 @@ impl JwtMaker<'_> {
         &self.dec_pem
     }
 
-    pub fn issue(&self, claims: impl Serialize) -> FResult<String> {
+    pub fn encode(&self, claims: impl Serialize) -> FResult<String> {
         let mut header = JwtHeader::new(self.alg);
         header.kid = self.kid.clone();
         header.jku = self.jku.clone();
         Ok(jwt_encode(&header, &claims, &self.enc_key)?)
     }
+
+    pub fn decode<T: DeserializeOwned>(&self, token: &str) -> FResult<TokenData<T>> {
+        Ok(jwt_decode(token, &self.dec_key, &self.validator)?)
+    }
+
+    pub fn decode_session(&self, auth: &BearerAuth) -> FResult<SessionClaims> {
+        let data = self.decode::<SessionClaims>(auth.token())?;
+        Ok(data.claims)
+    }
+}
+
+// use std::pin::Pin;
+// use std::task::{Context, Poll};
+
+// use actix_service::{Service, Transform};
+// use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+// use futures::future::{ok, Ready};
+// use futures::Future;
+
+use actix_web_httpauth::extractors::bearer::BearerAuth;
+// use actix_web_httpauth::extractors::AuthenticationError;
+// use actix_web_httpauth::middleware::HttpAuthentication;
+
+// #[derive(Debug)]
+// pub struct Name {
+//     field: Type
+// }
+
+#[get("/validate")]
+pub async fn validate_endpoint(data: web::Data<AppState<'_>>, auth: BearerAuth) -> FResult<String> {
+    // TODO: transform this into a service and auto refresh token
+    Ok(format!("OK!\n{:?}", data.jwt.decode_session(&auth)?))
 }

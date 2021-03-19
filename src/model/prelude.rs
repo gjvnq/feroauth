@@ -1,6 +1,6 @@
 pub use log::{debug, error, info, trace, warn};
 
-pub use std::io::Error as IOError;
+pub use std::io::Error as IOErrorReal;
 pub use std::io::ErrorKind as IOErrorKind;
 pub use std::io::Result as IOResult;
 
@@ -10,7 +10,7 @@ pub use serde::{Deserialize, Serialize};
 
 pub use sqlx::mysql::MySqlPool;
 pub use sqlx::types::Uuid;
-pub use sqlx::Error as SQLError;
+pub use sqlx::Error as SQLErrorReal;
 pub use sqlx::Result as SQLResult;
 
 pub use chrono::{DateTime, TimeZone, Utc};
@@ -21,15 +21,17 @@ pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
 pub use actix_session::{CookieSession, Session};
 
-use jsonwebtoken::errors::Error as JwtError;
-use openssl::error::ErrorStack as SslErrorStack;
+use jsonwebtoken::errors::Error as JwtErrorReal;
+use openssl::error::ErrorStack as SslErrorStackReal;
 
 pub use qstring::QString;
 
-pub use argonautica::Error as ArgoError;
+pub use argonautica::Error as ArgoErrorReal;
 
 pub use crate::model::db::get_tx;
 pub use crate::model::{FSession, MinUser};
+
+use std::panic::Location;
 
 pub const MIN_NON_EMPTY_STR: usize = 1;
 
@@ -62,30 +64,88 @@ pub enum InvalidValue {
 }
 
 #[derive(Debug)]
-pub enum FError {
+pub struct FError {
+    file: String,
+    line: u32,
+    col: u32,
+    inner: FErrorInner,
+}
+
+#[derive(Debug)]
+pub enum FErrorInner {
     #[allow(unused)]
     SerializationError(String),
     #[allow(unused)]
     NotImplemented,
-    SQLError(SQLError),
-    IOError(IOError),
+    SQLError(SQLErrorReal),
+    IOError(IOErrorReal),
     // InvalidValue(InvalidValue),
     UuidParseError(String),
-    ArgoError(ArgoError),
-    SslErrorStack(SslErrorStack),
-    JwtError(JwtError),
+    ArgoError(ArgoErrorReal),
+    SslErrorStack(SslErrorStackReal),
+    JwtError(JwtErrorReal),
     FauxPanic(&'static str, Option<String>),
 }
+
+pub use FErrorInner::{
+    ArgoError, FauxPanic, IOError, JwtError, NotImplemented, SQLError, SerializationError,
+    SslErrorStack, UuidParseError,
+};
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
 pub type FResult<T> = Result<T, FError>;
 
 impl FError {
+    #[track_caller]
+    pub fn new(inner: FErrorInner) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: inner,
+        }
+    }
+
+    #[track_caller]
+    pub fn new_faux_panic_1(a: &'static str) -> Self {
+        FError::new(FErrorInner::FauxPanic(a, None))
+    }
+
+    #[track_caller]
+    pub fn new_faux_panic_2(a: &'static str, b: Option<String>) -> Self {
+        FError::new(FErrorInner::FauxPanic(a, b))
+    }
+
+    #[track_caller]
+    pub fn new_faux_panic_3<T: std::fmt::Debug>(a: &'static str, b: T) -> Self {
+        let msg = format!("{:?}", b);
+        FError::new_faux_panic_2(a, Some(msg))
+    }
+
     pub fn is_not_found(&self) -> bool {
-        match self {
-            FError::SQLError(SQLError::RowNotFound) => true,
-            FError::IOError(err) => match err.kind() {
+        match &self.inner {
+            SQLError(SQLErrorReal::RowNotFound) => true,
+            IOError(err) => match err.kind() {
                 std::io::ErrorKind::NotFound => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_unauthorized(&self) -> bool {
+        use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
+        match &self.inner {
+            JwtError(err) => match err.kind() {
+                JwtErrorKind::InvalidToken => true,
+                JwtErrorKind::InvalidSignature => true,
+                JwtErrorKind::ExpiredSignature => true,
+                JwtErrorKind::InvalidIssuer => true,
+                JwtErrorKind::InvalidAudience => true,
+                JwtErrorKind::InvalidSubject => true,
+                JwtErrorKind::ImmatureSignature => true,
+                JwtErrorKind::InvalidAlgorithm => true,
                 _ => false,
             },
             _ => false,
@@ -95,7 +155,10 @@ impl FError {
 
 impl std::fmt::Display for FError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        fmt.write_fmt(format_args!("{:?}", self))
+        fmt.write_fmt(format_args!(
+            "{}:{}:{} {:?}",
+            self.file, self.line, self.col, self.inner
+        ))
     }
 }
 
@@ -103,39 +166,76 @@ impl actix_web::error::ResponseError for FError {
     fn status_code(&self) -> actix_web::http::StatusCode {
         if self.is_not_found() {
             actix_web::http::StatusCode::NOT_FOUND
+        } else if self.is_unauthorized() {
+            actix_web::http::StatusCode::UNAUTHORIZED
         } else {
             actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
         }
     }
 }
 
-impl std::convert::From<IOError> for FError {
-    fn from(err: IOError) -> Self {
-        FError::IOError(err)
+impl std::convert::From<IOErrorReal> for FError {
+    #[track_caller]
+    fn from(err: IOErrorReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: IOError(err),
+        }
     }
 }
 
-impl std::convert::From<SQLError> for FError {
-    fn from(err: SQLError) -> Self {
-        FError::SQLError(err)
+impl std::convert::From<SQLErrorReal> for FError {
+    #[track_caller]
+    fn from(err: SQLErrorReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: SQLError(err),
+        }
     }
 }
 
-impl std::convert::From<ArgoError> for FError {
-    fn from(err: ArgoError) -> Self {
-        FError::ArgoError(err)
+impl std::convert::From<ArgoErrorReal> for FError {
+    #[track_caller]
+    fn from(err: ArgoErrorReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: ArgoError(err),
+        }
     }
 }
 
-impl std::convert::From<JwtError> for FError {
-    fn from(err: JwtError) -> Self {
-        FError::JwtError(err)
+impl std::convert::From<JwtErrorReal> for FError {
+    #[track_caller]
+    fn from(err: JwtErrorReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: JwtError(err),
+        }
     }
 }
 
-impl std::convert::From<SslErrorStack> for FError {
-    fn from(err: SslErrorStack) -> Self {
-        FError::SslErrorStack(err)
+impl std::convert::From<SslErrorStackReal> for FError {
+    #[track_caller]
+    fn from(err: SslErrorStackReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: SslErrorStack(err),
+        }
     }
 }
 
@@ -143,13 +243,13 @@ impl std::convert::From<SslErrorStack> for FError {
 pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     match Uuid::parse_str(&val) {
         Ok(v) => Ok(v),
-        Err(_) => Err(FError::UuidParseError(val.to_string())),
+        Err(_) => Err(FError::new(UuidParseError(val.to_string()))),
     }
 }
 
 pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
     match Uuid::from_slice(&val) {
         Ok(v) => Ok(v),
-        Err(_) => Err(FError::UuidParseError(format!("{:?}", val))),
+        Err(_) => Err(FError::new(UuidParseError(format!("{:?}", val)))),
     }
 }
