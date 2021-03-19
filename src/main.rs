@@ -48,12 +48,7 @@ async fn main() -> FResult<()> {
     }
 
     let jwt_maker = jwt::JwtMaker::new().unwrap();
-
-    let p = Password::new(Uuid::new_v4(), "admin", false);
-    println!("{:?}", p);
-    let t = Utc::now().timestamp_millis();
-    println!("{:?}", p.unwrap().just_verify("admin"));
-    println!("{}", Utc::now().timestamp_millis() - t);
+    debug!("JWT KEY PEM: {}", jwt_maker.public_key_pem());
 
     let mut server = HttpServer::new(move || {
         App::new()

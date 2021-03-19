@@ -11,11 +11,12 @@ use ring::digest::{digest, SHA256};
 const DEFAULT_JWT_ALG: JwtAlgorithm = JwtAlgorithm::ES256;
 
 #[post("/keys")]
-async fn keys_endpoint(_data: web::Data<AppState<'_>>, _req: HttpRequest) -> FResult<HttpResponse> {
-    unimplemented!()
+async fn keys_endpoint(data: web::Data<AppState<'_>>, _req: HttpRequest) -> FResult<String> {
+    let ans = format!("[{}]", data.jwt.public_key_jwk());
+    Ok(ans)
 }
 
-// TOOD: Automatic key rotation
+// TOOD: (long term) Automatic key rotation
 
 #[derive(Debug, Clone)]
 pub struct JwtMaker<'a> {
@@ -24,6 +25,8 @@ pub struct JwtMaker<'a> {
     jku: Option<String>,
     enc_key: EncodingKey,
     dec_key: DecodingKey<'a>,
+    dec_jwk: String,
+    dec_pem: String,
 }
 
 fn alg2nid(alg: JwtAlgorithm) -> FResult<Nid> {
@@ -51,7 +54,7 @@ fn nid2crv(nid: Nid) -> FResult<&'static str> {
     }
 }
 
-fn compute_kid_ec<T: openssl::pkey::HasPublic>(ec_key: &EcKey<T>) -> FResult<String> {
+fn ec_key2jwk<T: openssl::pkey::HasPublic>(ec_key: &EcKey<T>) -> FResult<String> {
     // Get key parameters
     let ec_group = ec_key.group();
     let crv = match ec_group.curve_name() {
@@ -65,43 +68,10 @@ fn compute_kid_ec<T: openssl::pkey::HasPublic>(ec_key: &EcKey<T>) -> FResult<Str
     };
     let crv = nid2crv(crv)?;
     let point = ec_key.public_key();
-    let mut bigctx = match BigNumContext::new() {
-        Ok(v) => v,
-        Err(err) => {
-            let msg = format!("error_stack={:?}", err);
-            return Err(FError::FauxPanic(
-                "failed to compute key thumbprint: BigNumContext::new",
-                Some(msg),
-            ));
-        }
-    };
-    let mut x = match BigNum::new() {
-        Ok(v) => v,
-        Err(err) => {
-            let msg = format!("error_stack={:?}", err);
-            return Err(FError::FauxPanic(
-                "failed to compute key thumbprint: BigNum::new",
-                Some(msg),
-            ));
-        }
-    };
-    let mut y = match BigNum::new() {
-        Ok(v) => v,
-        Err(err) => {
-            let msg = format!("error_stack={:?}", err);
-            return Err(FError::FauxPanic(
-                "failed to compute key thumbprint: BigNum::new",
-                Some(msg),
-            ));
-        }
-    };
-    if let Err(err) = point.affine_coordinates_gfp(ec_group, &mut x, &mut y, &mut bigctx) {
-        let msg = format!("error_stack={:?}", err);
-        return Err(FError::FauxPanic(
-            "failed to compute key thumbprint: EcPointRef.affine_coordinates_gfp",
-            Some(msg),
-        ));
-    }
+    let mut bigctx = BigNumContext::new()?;
+    let mut x = BigNum::new()?;
+    let mut y = BigNum::new()?;
+    point.affine_coordinates_gfp(ec_group, &mut x, &mut y, &mut bigctx)?;
 
     // Make the "canonical" JSON representation of the key
     let jk = format!(
@@ -109,10 +79,13 @@ fn compute_kid_ec<T: openssl::pkey::HasPublic>(ec_key: &EcKey<T>) -> FResult<Str
         crv, x, y
     );
     debug!("{}", jk);
+    Ok(jk)
+}
 
+fn compute_sha256_base64(val: &str) -> String {
     // And use the hash of said representation as the kid
-    let hash = digest(&SHA256, jk.as_bytes());
-    Ok(base64::encode(hash))
+    let hash = digest(&SHA256, val.as_bytes());
+    base64::encode(hash)
 }
 
 impl JwtMaker<'_> {
@@ -126,88 +99,27 @@ impl JwtMaker<'_> {
 
     fn new_ec<'a>(alg: JwtAlgorithm) -> FResult<JwtMaker<'a>> {
         let alg_nid = alg2nid(alg)?;
-        let ecg = match EcGroup::from_curve_name(alg_nid) {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: EcGroup::from_curve_name",
-                    Some(msg),
-                ));
-            }
-        };
-        let ec_key = match EcKey::generate(&ecg) {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: EcKey::generate",
-                    Some(msg),
-                ));
-            }
-        };
-        let key = match PKey::from_ec_key(ec_key.clone()) {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: PKey::from_ec_key",
-                    Some(msg),
-                ));
-            }
-        };
-        let pem_private = match key.private_key_to_pem_pkcs8() {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: key.private_key_to_pem_pkcs8",
-                    Some(msg),
-                ));
-            }
-        };
-        let pem_public = match key.public_key_to_pem() {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: key.public_key_to_pem",
-                    Some(msg),
-                ));
-            }
-        };
-        let enc_key = match EncodingKey::from_ec_pem(&pem_private) {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: EncodingKey::from_ec_pem",
-                    Some(msg),
-                ));
-            }
-        };
-        let dec_key = match DecodingKey::from_ec_pem(&pem_public) {
-            Ok(v) => v,
-            Err(err) => {
-                let msg = format!("alg={:?} error_stack={:?}", alg, err);
-                return Err(FError::FauxPanic(
-                    "failed to generate JWT key pair: DecodingKey::from_ec_pem",
-                    Some(msg),
-                ));
-            }
-        };
+        let ecg = EcGroup::from_curve_name(alg_nid)?;
+        let ec_key = EcKey::generate(&ecg)?;
+        let key = PKey::from_ec_key(ec_key.clone())?;
+        let pem_private = key.private_key_to_pem_pkcs8()?;
+        let pem_public = key.public_key_to_pem()?;
+        let enc_key = EncodingKey::from_ec_pem(&pem_private)?;
+        let dec_key = DecodingKey::from_ec_pem(&pem_public)?;
         let dec_key = dec_key.into_static();
 
-        let kid = compute_kid_ec(&ec_key)?;
-        debug!(
-            "PEM pub key for {}: {}",
-            kid,
-            std::str::from_utf8(&pem_public)
-                .unwrap_or("")
-                .replace("-----\n", "----- ")
-                .replace("\n-----", " -----")
-                .replace("\n", "")
-        );
+        let dec_jwk = ec_key2jwk(&ec_key)?;
+        let dec_pem = match std::str::from_utf8(&pem_public) {
+            Ok(v) => v,
+            Err(err) => {
+                return Err(FError::FauxPanic(
+                    "failed to load PEM string",
+                    Some(format!("{:?}", err)),
+                ))
+            }
+        };
+
+        let kid = compute_sha256_base64(&dec_jwk);
 
         let ans = JwtMaker {
             alg: alg,
@@ -215,12 +127,22 @@ impl JwtMaker<'_> {
             jku: None,
             enc_key: enc_key,
             dec_key: dec_key,
+            dec_jwk: dec_jwk,
+            dec_pem: dec_pem.to_string(),
         };
         if let Err(err) = ans.issue("hi") {
             let msg = format!("{:?}", err);
             return Err(FError::FauxPanic("failed to issue test token", Some(msg)));
         }
         Ok(ans)
+    }
+
+    pub fn public_key_jwk(&self) -> &str {
+        &self.dec_jwk
+    }
+
+    pub fn public_key_pem(&self) -> &str {
+        &self.dec_pem
     }
 
     pub fn issue(&self, claims: impl Serialize) -> FResult<String> {

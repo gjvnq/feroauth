@@ -22,6 +22,7 @@ pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 pub use actix_session::{CookieSession, Session};
 
 use jsonwebtoken::errors::Error as JwtError;
+use openssl::error::ErrorStack as SslErrorStack;
 
 pub use qstring::QString;
 
@@ -62,14 +63,16 @@ pub enum InvalidValue {
 
 #[derive(Debug)]
 pub enum FError {
+    #[allow(unused)]
+    SerializationError(String),
+    #[allow(unused)]
+    NotImplemented,
     SQLError(SQLError),
     IOError(IOError),
-    SerializationError(String),
-    TemplateError(String, String),
     // InvalidValue(InvalidValue),
     UuidParseError(String),
     ArgoError(ArgoError),
-    NotImplemented,
+    SslErrorStack(SslErrorStack),
     JwtError(JwtError),
     FauxPanic(&'static str, Option<String>),
 }
@@ -127,6 +130,12 @@ impl std::convert::From<ArgoError> for FError {
 impl std::convert::From<JwtError> for FError {
     fn from(err: JwtError) -> Self {
         FError::JwtError(err)
+    }
+}
+
+impl std::convert::From<SslErrorStack> for FError {
+    fn from(err: SslErrorStack) -> Self {
+        FError::SslErrorStack(err)
     }
 }
 
