@@ -49,7 +49,11 @@ impl<'a> Password {
         })
     }
 
-    pub async fn verify_and_mark(&self, cleartext: &str, tx: &mut Transaction<'_>) -> FResult<PasswordCheck> {
+    pub async fn verify_and_mark(
+        &self,
+        cleartext: &str,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<PasswordCheck> {
         let ans = self.just_verify(cleartext)?;
         if ans != PasswordCheck::WrongPassword {
             let time = Utc::now();

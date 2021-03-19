@@ -1,5 +1,5 @@
 use crate::model::prelude::*;
-use crate::model::user::{User,MinUser};
+use crate::model::user::{MinUser, User};
 use chrono::Duration;
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
@@ -54,9 +54,8 @@ pub struct SessionClaims {
     pub exp: i64,
     pub user: MinUser,
     pub real_user: MinUser,
-    pub auth_time: i64
+    pub auth_time: i64,
 }
-
 
 impl FSession {
     #[allow(unused)]
@@ -155,7 +154,7 @@ impl FSession {
             exp: self.valid_until().timestamp(),
             user: self.user.clone(),
             real_user: self.real_user.clone(),
-            auth_time: self.login_time.timestamp()
+            auth_time: self.login_time.timestamp(),
         }
     }
 }

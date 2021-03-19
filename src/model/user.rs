@@ -62,7 +62,11 @@ impl std::convert::From<User> for MinUser {
 }
 
 impl User {
-    pub(crate) async fn mark_last_login(uuid: Uuid, time: DateTime<Utc>, tx: &mut Transaction<'_>) -> FResult<()> {
+    pub(crate) async fn mark_last_login(
+        uuid: Uuid,
+        time: DateTime<Utc>,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<()> {
         sqlx::query!(
             "UPDATE `user` SET `last_login` = ? WHERE `uuid` = ? AND (`last_login` IS NULL OR `last_login` <= ?)",
             time, uuid, time
@@ -156,7 +160,7 @@ impl User {
         // Remove trouble making whitespace
         let login_handle = login_handle.trim();
         trace!("Loading user {:?}", login_handle);
-        
+
         let base_row = sqlx::query!(
             "SELECT `user`.`uuid`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
             login_handle

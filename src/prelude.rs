@@ -9,8 +9,11 @@ pub use actix_session::Session as SSession;
 
 pub use crate::model::{Password, User};
 
-pub struct AppState {
+pub use jsonwebtoken::Algorithm as JwtAlgorithm;
+
+pub struct AppState<'a> {
     pub db: sqlx::Pool<sqlx::MySql>,
+    pub jwt: crate::jwt::JwtMaker<'a>,
 }
 
 pub fn get_ip(req: &HttpRequest) -> (String, String) {
