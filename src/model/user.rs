@@ -21,13 +21,21 @@ pub struct LoginHandle {
 pub struct MinUser {
     uuid: Uuid,
     pub display_name: String,
-    pub handle: String,
+    pub handle: Option<String>,
     // TODO: add groups?
 }
 
 impl MinUser {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
+    }
+
+    pub(crate) fn new(uuid: Uuid, display_name: &str) -> MinUser {
+        MinUser {
+            uuid: uuid,
+            display_name: display_name.to_string(),
+            handle: None,
+        }
     }
 
     #[allow(unused)]
@@ -50,7 +58,7 @@ impl MinUser {
         Ok(MinUser {
             uuid: parse_uuid_vec(base_row.uuid)?,
             display_name: base_row.display_name,
-            handle: login_handle.to_string(),
+            handle: Some(login_handle.to_string()),
         })
     }
 }
@@ -80,7 +88,7 @@ impl User {
         MinUser {
             uuid: self.uuid,
             display_name: self.display_name.clone(),
-            handle: self.uuid.to_string(),
+            handle: Some(self.uuid.to_string()),
         }
     }
 

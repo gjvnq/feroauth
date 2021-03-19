@@ -6,6 +6,7 @@ pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
 pub use actix_session::CookieSession;
 pub use actix_session::Session as SSession;
+pub use actix_web_httpauth::extractors::bearer::BearerAuth;
 
 pub use crate::model::{Password, User};
 
@@ -24,4 +25,13 @@ pub fn get_ip(req: &HttpRequest) -> (String, String) {
         .to_string();
     let ip_addr_peer = req.peer_addr().unwrap().ip().to_string();
     (ip_addr_real, ip_addr_peer)
+}
+
+pub async fn decode_and_refresh_session(
+    data: &AppState<'_>,
+    auth: &BearerAuth,
+) -> FResult<MinSession> {
+    let token = data.jwt.decode_session(auth)?;
+    token.refresh(&data.db).await?;
+    Ok(token)
 }

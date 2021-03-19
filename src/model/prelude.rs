@@ -29,7 +29,7 @@ pub use qstring::QString;
 pub use argonautica::Error as ArgoErrorReal;
 
 pub use crate::model::db::get_tx;
-pub use crate::model::{FSession, MinUser};
+pub use crate::model::*;
 
 use std::panic::Location;
 
@@ -155,10 +155,7 @@ impl FError {
 
 impl std::fmt::Display for FError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        fmt.write_fmt(format_args!(
-            "{}:{}:{} {:?}",
-            self.file, self.line, self.col, self.inner
-        ))
+        fmt.write_fmt(format_args!("{}:{}:{}", self.file, self.line, self.col))
     }
 }
 
@@ -240,6 +237,7 @@ impl std::convert::From<SslErrorStackReal> for FError {
 }
 
 #[allow(unused)]
+#[track_caller]
 pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     match Uuid::parse_str(&val) {
         Ok(v) => Ok(v),
@@ -247,6 +245,7 @@ pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
     }
 }
 
+#[track_caller]
 pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
     match Uuid::from_slice(&val) {
         Ok(v) => Ok(v),

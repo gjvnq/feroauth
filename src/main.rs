@@ -67,6 +67,7 @@ async fn main() -> FResult<()> {
             .service(jwt::keys_endpoint)
             .service(jwt::validate_endpoint)
             .service(users::login_endpoint)
+            .service(users::get_user_endpoint)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

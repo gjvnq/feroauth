@@ -123,7 +123,7 @@ async fn login_endpoint(
     if ans.status == LoginResponseStatus::LoggedIn {
         let (ip_addr_real, ip_addr_peer) = get_ip(&req);
         let remember_me = info.remember_me.unwrap_or(false);
-        let session = FSession::new(
+        let session = FullSession::new(
             &user,
             &user,
             remember_me,
@@ -145,4 +145,22 @@ async fn login_endpoint(
     } else {
         unreachable!()
     }
+}
+
+#[get("/users/{uuid}")]
+async fn get_user_endpoint(
+    data: web::Data<AppState<'_>>,
+    auth: BearerAuth,
+    path: web::Path<String>,
+) -> FResult<HttpResponse> {
+    let token = decode_and_refresh_session(&data, &auth).await?;
+    debug!("{:?}", token);
+
+    // TODO: check permission
+    debug!("{:?}", path);
+    let uuid = parse_uuid_str(&path)?;
+    let mut tx = data.db.begin().await.unwrap();
+    let user = User::load_by_uuid(uuid, &mut tx).await?;
+
+    return Ok(HttpResponse::Ok().json(user));
 }

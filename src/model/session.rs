@@ -1,40 +1,30 @@
 use crate::model::prelude::*;
 use crate::model::user::{MinUser, User};
 use chrono::Duration;
+use sqlx::{MySql, Pool};
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
 const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
+const REFRESH_INTERVAL: i64 = 15; // 15 s
 
 #[derive(Debug, sqlx::FromRow)]
-// provisory pub
-pub struct FSessionRaw {
+struct FullSessionRaw {
     uuid: Uuid,
     user_uuid: Uuid,
+    user_display_name: String,
     real_user_uuid: Uuid,
+    real_user_display_name: String,
     login_time: DateTime<Utc>,
     last_used: DateTime<Utc>,
     remember_me: bool,
-    ip_addr_real: Vec<u8>,
-    ip_addr_peer: Vec<u8>,
+    ip_addr_real: String,
+    ip_addr_peer: String,
     user_agent: String,
     data: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct FSessionInner {
-    user: MinUser,
-    real_user: MinUser,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-// This is stored on the cookie itself
-struct FSessionMin {
-    uuid: Uuid,
-    user: MinUser,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FSession {
+pub struct FullSession {
     uuid: Uuid,
     user: MinUser,
     real_user: MinUser,
@@ -47,7 +37,7 @@ pub struct FSession {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionClaims {
+pub struct MinSession {
     /// Session UUID
     pub sid: Uuid,
     pub iat: i64,
@@ -57,7 +47,21 @@ pub struct SessionClaims {
     pub auth_time: i64,
 }
 
-impl FSession {
+impl MinSession {
+    pub async fn refresh(&self, db: &Pool<MySql>) -> FResult<()> {
+        let now = Utc::now();
+        let delta = now.timestamp() - self.iat;
+        debug!("Delta: {:?}", delta);
+        if REFRESH_INTERVAL < delta {
+            let mut tx = db.begin().await?;
+            FullSession::refresh_internal(self.sid, now, &mut tx).await?;
+            tx.commit().await?;
+        }
+        Ok(())
+    }
+}
+
+impl FullSession {
     #[allow(unused)]
     pub fn get_uuid(&self) -> Uuid {
         return self.uuid;
@@ -90,9 +94,9 @@ impl FSession {
         ip_addr_real: &str,
         ip_addr_peer: &str,
         user_agent: &str,
-    ) -> FSession {
+    ) -> FullSession {
         let now = Utc::now();
-        FSession {
+        FullSession {
             uuid: Uuid::new_v4(),
             user: user.clone(),
             real_user: real_user.clone(),
@@ -105,29 +109,62 @@ impl FSession {
         }
     }
 
+    async fn refresh_internal(
+        uuid: Uuid,
+        time: DateTime<Utc>,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<()> {
+        debug!("Refreshing session {:?} with time {}", uuid, time);
+        sqlx::query!(
+            "UPDATE `session` SET `last_used` = ? WHERE `uuid` = ?",
+            time,
+            uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        Ok(())
+    }
+
     /// If `refresh` is true (as it almost always should), the session's valid until time will be extended if needed.
     #[allow(unused)]
     pub async fn load_by_uuid(
         uuid: Uuid,
-        _refresh: bool,
+        refresh: bool,
         tx: &mut Transaction<'_>,
-    ) -> FResult<FSessionRaw> {
+    ) -> FResult<FullSession> {
         trace!("Loading session {:?}", uuid);
         let row = sqlx::query_as_unchecked!(
-            FSessionRaw,
-            "SELECT `uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data` FROM `sessions` WHERE `uuid` = ?",
+            FullSessionRaw,
+            "SELECT `uuid`, `user_uuid`, `user_display_name`, `real_user_uuid`, `real_user_display_name`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data` FROM `session_view` WHERE `uuid` = ?",
             uuid
         )
         .fetch_one(&mut *tx)
         .await?;
-        Ok(row)
+
+        let mut last_used = row.last_used;
+        if refresh {
+            last_used = Utc::now();
+            FullSession::refresh_internal(row.uuid, last_used, tx).await?;
+        }
+
+        Ok(FullSession {
+            uuid: row.uuid,
+            user: MinUser::new(row.user_uuid, &row.user_display_name),
+            real_user: MinUser::new(row.real_user_uuid, &row.real_user_display_name),
+            login_time: row.login_time,
+            last_used: last_used,
+            remember_me: row.remember_me,
+            ip_addr_real: row.ip_addr_real,
+            ip_addr_peer: row.ip_addr_peer,
+            user_agent: row.user_agent,
+        })
     }
 
-    #[allow(unused)]
     pub async fn save(&self, tx: &mut Transaction<'_>) -> FResult<()> {
         trace!("Saving session {:?}", self.get_uuid());
         sqlx::query!(
-            "INSERT INTO `sessions` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
+            "INSERT INTO `session` (`uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
             self.uuid,
             self.user.get_uuid(),
             self.real_user.get_uuid(),
@@ -145,9 +182,9 @@ impl FSession {
         Ok(())
     }
 
-    pub fn to_claims(&self) -> SessionClaims {
+    pub fn to_claims(&self) -> MinSession {
         let now = Utc::now();
-        SessionClaims {
+        MinSession {
             /// Session UUID
             sid: self.uuid,
             iat: now.timestamp(),

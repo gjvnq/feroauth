@@ -1,4 +1,3 @@
-use crate::model::session::SessionClaims;
 use crate::prelude::*;
 use jsonwebtoken::decode as jwt_decode;
 use jsonwebtoken::encode as jwt_encode;
@@ -155,31 +154,21 @@ impl JwtMaker<'_> {
         Ok(jwt_decode(token, &self.dec_key, &self.validator)?)
     }
 
-    pub fn decode_session(&self, auth: &BearerAuth) -> FResult<SessionClaims> {
-        let data = self.decode::<SessionClaims>(auth.token())?;
+    pub fn decode_session(&self, auth: &BearerAuth) -> FResult<MinSession> {
+        let data = self.decode::<MinSession>(auth.token())?;
         Ok(data.claims)
     }
 }
 
-// use std::pin::Pin;
-// use std::task::{Context, Poll};
-
-// use actix_service::{Service, Transform};
-// use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
-// use futures::future::{ok, Ready};
-// use futures::Future;
-
-use actix_web_httpauth::extractors::bearer::BearerAuth;
-// use actix_web_httpauth::extractors::AuthenticationError;
-// use actix_web_httpauth::middleware::HttpAuthentication;
-
-// #[derive(Debug)]
-// pub struct Name {
-//     field: Type
-// }
-
 #[get("/validate")]
 pub async fn validate_endpoint(data: web::Data<AppState<'_>>, auth: BearerAuth) -> FResult<String> {
     // TODO: transform this into a service and auto refresh token
-    Ok(format!("OK!\n{:?}", data.jwt.decode_session(&auth)?))
+    let token = decode_and_refresh_session(&data, &auth).await?;
+    Ok(format!("OK!\n{:?}", token))
 }
+
+// #[get("/validate2")]
+// pub async fn validate_endpoint2(data: web::Data<AppState<'_>>, session: MinSession) -> FResult<String> {
+//     // TODO: transform this into a service and auto refresh token
+//     Ok(format!("OK!\n{:?}", session))
+// }
