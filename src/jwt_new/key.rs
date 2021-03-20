@@ -24,11 +24,6 @@ impl JwtKey {
     pub fn from_jwk_str(data: &str) -> JwtResult<Self> {
         todo!()
     }
-
-    #[allow(unused, unused_variables)]
-    pub fn from_pem(data: &str) -> JwtResult<Self> {
-        todo!()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -240,10 +235,5 @@ impl JwtEcKeyInner {
             private: pri_key,
             private_jwk,
         })
-    }
-
-    #[allow(unused)]
-    pub(crate) fn from_pem(data: &str, exportable: bool) -> JwtResult<Self> {
-        todo!()
     }
 }
