@@ -1,4 +1,5 @@
 pub use crate::jwt_new::error::{JwtError, JwtErrorInner, JwtResult};
+pub use crate::jwt_new::jwk::{JwtAlgorithm};
 pub use openssl::bn::{BigNum, BigNumContext};
 pub use openssl::ec::EcGroup;
 pub use openssl::ec::EcKey as SslEcKey;
@@ -10,6 +11,9 @@ pub use serde::{Deserialize, Serialize};
 pub use serde_json::Result as JSResult;
 pub use serde_json::Value as JSValue;
 pub use std::convert::TryFrom;
+pub use serde::de::DeserializeOwned;
+pub use openssl::hash::{hash as openssl_hash, Hasher as SslHasher, MessageDigest};
+pub use openssl::sign::{Signer as SslSigner, Verifier as SslVerifier};
 
 #[track_caller]
 pub(crate) fn str2bignum(n: &str) -> JwtResult<BigNum> {

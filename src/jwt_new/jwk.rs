@@ -50,74 +50,74 @@ impl std::fmt::Display for JKeyType {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(into = "&str", try_from = "&str")]
-pub enum JCurveType {
-    JCrvP256,
-    JCrvP384,
-    JCrvP521,
+pub enum ECurve {
+    ECurveP256,
+    ECurveP384,
+    ECurveP521,
 }
 
-use {JCurveType::JCrvP256, JCurveType::JCrvP384, JCurveType::JCrvP521};
+use {ECurve::ECurveP256, ECurve::ECurveP384, ECurve::ECurveP521};
 
-impl JCurveType {
+impl ECurve {
     pub fn to_str(&self) -> &'static str {
         match self {
-            JCrvP256 => "P-256",
-            JCrvP384 => "P-384",
-            JCrvP521 => "P-521",
+            ECurveP256 => "P-256",
+            ECurveP384 => "P-384",
+            ECurveP521 => "P-521",
         }
     }
 
     pub fn to_nid(&self) -> Nid {
         match self {
-            JCrvP256 => Nid::X9_62_PRIME256V1,
-            JCrvP384 => Nid::SECP384R1,
-            JCrvP521 => Nid::SECP521R1,
+            ECurveP256 => Nid::X9_62_PRIME256V1,
+            ECurveP384 => Nid::SECP384R1,
+            ECurveP521 => Nid::SECP521R1,
         }
     }
 
     pub fn to_alg(&self) -> JwtAlgorithm {
         match self {
-            JCrvP256 => JwtAlgorithm::ES256,
-            JCrvP384 => JwtAlgorithm::ES384,
-            JCrvP521 => JwtAlgorithm::ES512,
+            ECurveP256 => JwtAlgorithm::ES256,
+            ECurveP384 => JwtAlgorithm::ES384,
+            ECurveP521 => JwtAlgorithm::ES512,
         }
     }
 }
 
-impl std::fmt::Display for JCurveType {
+impl std::fmt::Display for ECurve {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_str())
     }
 }
 
-impl std::convert::From<JCurveType> for &str {
-    fn from(val: JCurveType) -> Self {
+impl std::convert::From<ECurve> for &str {
+    fn from(val: ECurve) -> Self {
         val.to_str()
     }
 }
 
-impl std::convert::TryFrom<&str> for JCurveType {
+impl std::convert::TryFrom<&str> for ECurve {
     type Error = JwtError;
 
     fn try_from(val: &str) -> Result<Self, JwtError> {
         match val {
-            "P-256" => Ok(JCrvP256),
-            "P-384" => Ok(JCrvP384),
-            "P-521" => Ok(JCrvP521),
+            "P-256" => Ok(ECurveP256),
+            "P-384" => Ok(ECurveP384),
+            "P-521" => Ok(ECurveP521),
             _ => Err(JwtError::new(JwtErrorInner::UnknownCurve(val.to_string()))),
         }
     }
 }
 
-impl std::convert::TryFrom<Nid> for JCurveType {
+impl std::convert::TryFrom<Nid> for ECurve {
     type Error = JwtError;
 
     fn try_from(val: Nid) -> Result<Self, JwtError> {
         match val {
-            Nid::X9_62_PRIME256V1 => Ok(JCrvP256),
-            Nid::SECP256K1 => Ok(JCrvP256),
-            Nid::SECP384R1 => Ok(JCrvP384),
-            Nid::SECP521R1 => Ok(JCrvP521),
+            Nid::X9_62_PRIME256V1 => Ok(ECurveP256),
+            Nid::SECP256K1 => Ok(ECurveP256),
+            Nid::SECP384R1 => Ok(ECurveP384),
+            Nid::SECP521R1 => Ok(ECurveP521),
             _ => Err(JwtError::new(JwtErrorInner::UnknownCurve(format!(
                 "{:?}",
                 val
@@ -184,6 +184,40 @@ impl JwtAlgorithm {
             JwtAlgorithm::PS512 => "PS512",
         }
     }
+
+    pub(crate) fn to_hasher(&self) -> JwtResult<SslHasher> {
+        match self {
+            JwtAlgorithm::HS256 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::HS384 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::HS512 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::ES256 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::ES384 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::ES512 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::RS256 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::RS384 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::RS512 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::PS256 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::PS384 => Ok(SslHasher::new(self.to_md())?),
+            JwtAlgorithm::PS512 => Ok(SslHasher::new(self.to_md())?),
+        }
+    }
+
+    pub(crate) fn to_md(&self) -> MessageDigest {
+        match self {
+            JwtAlgorithm::HS256 => MessageDigest::sha256(),
+            JwtAlgorithm::HS384 => MessageDigest::sha384(),
+            JwtAlgorithm::HS512 => MessageDigest::sha512(),
+            JwtAlgorithm::ES256 => MessageDigest::sha256(),
+            JwtAlgorithm::ES384 => MessageDigest::sha384(),
+            JwtAlgorithm::ES512 => MessageDigest::sha512(),
+            JwtAlgorithm::RS256 => MessageDigest::sha256(),
+            JwtAlgorithm::RS384 => MessageDigest::sha384(),
+            JwtAlgorithm::RS512 => MessageDigest::sha512(),
+            JwtAlgorithm::PS256 => MessageDigest::sha256(),
+            JwtAlgorithm::PS384 => MessageDigest::sha384(),
+            JwtAlgorithm::PS512 => MessageDigest::sha512(),
+        }
+    }
 }
 
 impl std::convert::TryFrom<&str> for JwtAlgorithm {
@@ -227,14 +261,14 @@ impl std::convert::From<JwtAlgorithm> for JKeyType {
     }
 }
 
-impl std::convert::TryFrom<JwtAlgorithm> for JCurveType {
+impl std::convert::TryFrom<JwtAlgorithm> for ECurve {
     type Error = JwtError;
     #[track_caller]
     fn try_from(val: JwtAlgorithm) -> Result<Self, Self::Error> {
         match val {
-            JwtAlgorithm::ES256 => Ok(JCurveType::JCrvP256),
-            JwtAlgorithm::ES384 => Ok(JCurveType::JCrvP384),
-            JwtAlgorithm::ES512 => Ok(JCurveType::JCrvP521),
+            JwtAlgorithm::ES256 => Ok(ECurve::ECurveP256),
+            JwtAlgorithm::ES384 => Ok(ECurve::ECurveP384),
+            JwtAlgorithm::ES512 => Ok(ECurve::ECurveP521),
             _ => Err(JwtError::new(JwtErrorInner::AlgHasNoCurveType(val))),
         }
     }
@@ -243,7 +277,7 @@ impl std::convert::TryFrom<JwtAlgorithm> for JCurveType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct JwkRepr {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub crv: Option<JCurveType>,
+    pub crv: Option<ECurve>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub d: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -355,7 +389,7 @@ mod tests {
     fn jwk_json_encode_2() {
         let key = JwkRepr {
             kty: Some(JTypeEc),
-            crv: Some(JCrvP256),
+            crv: Some(ECurveP256),
             ..Default::default()
         };
         let j = serde_json::to_string(&key).unwrap();
@@ -373,7 +407,7 @@ mod tests {
             key,
             JwkRepr {
                 kty: Some(JTypeEc),
-                crv: Some(JCrvP256),
+                crv: Some(ECurveP256),
                 x: Some(
                     "7499149945062600705050524764908008277809478315939756347263185989105148022349"
                         .to_string()

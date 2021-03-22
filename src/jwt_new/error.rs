@@ -2,6 +2,7 @@ use crate::jwt_new::JwtAlgorithm;
 use core::panic::Location;
 use openssl::error::ErrorStack as SslErrorStackReal;
 use std::string::FromUtf8Error;
+use serde_json::error::Error as SerdeJsonErrorReal;
 
 pub type JwtResult<T> = Result<T, JwtError>;
 
@@ -23,6 +24,9 @@ pub enum JwtErrorInner {
     UnknownCurve(String),
     UnknownKeyType(String),
     InvalidKey(String),
+    NoPrivateKeyForPubKey(String),
+    InvalidSignature(String, String, String), // kid, data hash, sig
+    SerdeJson(SerdeJsonErrorReal),
     BigNumParseFail(String, String),
     Utf8Error(FromUtf8Error),
     Panic(&'static str, Option<String>),
@@ -79,6 +83,19 @@ impl std::convert::From<FromUtf8Error> for JwtError {
             line: loc.line(),
             col: loc.column(),
             inner: JwtErrorInner::Utf8Error(err),
+        }
+    }
+}
+
+impl std::convert::From<SerdeJsonErrorReal> for JwtError {
+    #[track_caller]
+    fn from(err: SerdeJsonErrorReal) -> Self {
+        let loc = Location::caller();
+        JwtError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: JwtErrorInner::SerdeJson(err),
         }
     }
 }
