@@ -1,14 +1,24 @@
 use crate::jwt_new::prelude::*;
 
-#[derive(Debug,Clone)]
+// #[derive(Debug,Clone,Copy)]
+// pub enum JwtKind {
+//     Sig,
+//     Enc,
+//     // First sign, then encrypt
+//     // EncSig
+// }
+#[derive(Debug, Clone)]
 pub struct JwToken<T> {
+    pub kid: String,
+    pub kind: JwkUse,
     pub header: JwtHeader,
-    pub claims: T
+    pub claims: T,
 }
 
-#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct JwtHeader {
     pub typ: Option<String>,
+    pub crit: Option<Vec<String>>,
     pub alg: Option<JwtAlgorithm>,
     pub cty: Option<String>,
     pub jku: Option<String>,
@@ -19,7 +29,7 @@ pub struct JwtHeader {
 
 impl JwtHeader {
     pub fn new(alg: JwtAlgorithm, kid: &str) -> JwtHeader {
-        JwtHeader{
+        JwtHeader {
             typ: Some("JWT".to_string()),
             alg: Some(alg),
             kid: Some(kid.to_string()),

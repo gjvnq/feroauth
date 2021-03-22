@@ -3,7 +3,7 @@ use crate::jwt_new::*;
 
 #[derive(Debug, Clone)]
 pub struct JwtEcKeyInner {
-    kid: String,
+    thumbprint_sha256: String,
     public: PKey<Public>,
     public_pem: String,
     public_jwk: JwkRepr,
@@ -11,12 +11,24 @@ pub struct JwtEcKeyInner {
     private_jwk: Option<JwkRepr>,
 }
 
-impl JwtKeyTraitLowLevel for JwtEcKeyInner {
+impl JwKeyTraitLowLevel for JwtEcKeyInner {
+    fn algorithm(&self) -> JwtAlgorithm {
+        self.algorithm()
+    }
     fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>> {
         self.sign_data(data)
     }
     fn verify_data(&self, data: &[u8], sig: &[u8]) -> JwtResult<()> {
         self.verify_data(data, sig)
+    }
+    fn is_exportable(&self) -> bool {
+        self.is_exportable()
+    }
+    fn thumbprint_sha256(&self) -> &str {
+        &self.thumbprint_sha256
+    }
+    fn key_type(&self) -> JKeyType {
+        self.key_type()
     }
 }
 
@@ -36,14 +48,19 @@ impl JwtAsymmetricKeyTrait for JwtEcKeyInner {
     fn has_private(&self) -> bool {
         self.has_private()
     }
-    fn is_exportable(&self) -> bool {
-        self.is_exportable()
-    }
 }
 
 impl JwtEcKeyInner {
     pub fn algorithm(&self) -> JwtAlgorithm {
         self.public_jwk.crv.unwrap().to_alg()
+    }
+
+    pub fn key_type(&self) -> JKeyType {
+        JKeyType::JTypeEc
+    }
+
+    pub fn thumbprint_sha256(&self) -> &str {
+        &self.thumbprint_sha256
     }
 
     pub fn public_key_jwk(&self) -> &JwkRepr {
@@ -76,7 +93,11 @@ impl JwtEcKeyInner {
     fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>> {
         let sk = match &self.private {
             Some(key) => key,
-            None => return Err(JwtError::new(JwtErrorInner::NoPrivateKeyForPubKey(self.kid.clone())))
+            None => {
+                return Err(JwtError::new(JwtErrorInner::NoPrivateKeyForPubKey(
+                    self.thumbprint_sha256.clone(),
+                )))
+            }
         };
         let mut signer = SslSigner::new(self.algorithm().to_md(), sk)?;
         let ans = signer.sign_oneshot_to_vec(data)?;
@@ -90,12 +111,18 @@ impl JwtEcKeyInner {
             true => Ok(()),
             false => {
                 // pretty print stuff and return the error
-                let hash = self.hash(data).map(|v| hex::encode(v)).unwrap_or(base64::encode(data));
+                let hash = self
+                    .hash(data)
+                    .map(|v| hex::encode(v))
+                    .unwrap_or(base64::encode(data));
                 let sig = base64::encode(sig);
-                Err(JwtError::new(JwtErrorInner::InvalidSignature(self.kid.clone(), hash, sig)))
+                Err(JwtError::new(JwtErrorInner::InvalidSignature {
+                    kid: self.thumbprint_sha256.clone(),
+                    data: hash,
+                    sig: sig,
+                }))
             }
         }
-        
     }
 
     fn get_crv_x_y(key: &SslEcKey<Public>) -> JwtResult<(ECurve, String, String)> {
@@ -164,7 +191,7 @@ impl JwtEcKeyInner {
         let public_pem = String::from_utf8(pub_key.public_key_to_pem()?)?;
 
         Ok(JwtEcKeyInner {
-            kid: public_jwk.thumbprint_sha256(),
+            thumbprint_sha256: public_jwk.thumbprint_sha256(),
             public: PKey::from_ec_key(pub_key)?,
             public_jwk,
             public_pem,
@@ -218,7 +245,7 @@ impl JwtEcKeyInner {
         }
 
         Ok(JwtEcKeyInner {
-            kid: public_jwk.thumbprint_sha256(),
+            thumbprint_sha256: public_jwk.thumbprint_sha256(),
             public: PKey::from_ec_key(pub_key)?,
             public_pem,
             public_jwk,
@@ -234,12 +261,44 @@ mod tests {
 
     #[test]
     fn test_from_param() {
-        let key = JwtEcKeyInner::from_params(ECurve::ECurveP256, "97137674545862414485372913106719518332096267315416902201730528904183731761874", "87426651606086701008629633665535398077092750158068373881855238506228433010151", Some("90625108496000347380258537061455589299070717029212144039681325579070783497755"), true);
+        let key = JwtEcKeyInner::from_params(
+            ECurve::ECurveP256,
+            "97137674545862414485372913106719518332096267315416902201730528904183731761874",
+            "87426651606086701008629633665535398077092750158068373881855238506228433010151",
+            Some("90625108496000347380258537061455589299070717029212144039681325579070783497755"),
+            true,
+        );
         assert!(key.is_ok());
         let key = key.unwrap();
-        assert_eq!(Some(JwkRepr { crv: Some(ECurve::ECurveP256), d: None, dp: None, dq: None, e: None, k: None, kty: Some(JKeyType::JTypeEc), n: None, oth: None, p: Some("90625108496000347380258537061455589299070717029212144039681325579070783497755".to_string()), q: None, qi: None, r: None, t: None, x: Some("97137674545862414485372913106719518332096267315416902201730528904183731761874".to_string()), y: Some("87426651606086701008629633665535398077092750158068373881855238506228433010151".to_string()) }).as_ref(), key.private_key_jwk());
+        assert_eq!(
+            Some(JwkRepr {
+                crv: Some(ECurve::ECurveP256),
+                kty: Some(JKeyType::JTypeEc),
+                p: Some(
+                    "90625108496000347380258537061455589299070717029212144039681325579070783497755"
+                        .to_string()
+                ),
+                x: Some(
+                    "97137674545862414485372913106719518332096267315416902201730528904183731761874"
+                        .to_string()
+                ),
+                y: Some(
+                    "87426651606086701008629633665535398077092750158068373881855238506228433010151"
+                        .to_string()
+                ),
+                ..Default::default()
+            })
+            .as_ref(),
+            key.private_key_jwk()
+        );
 
-        let key = JwtEcKeyInner::from_params(ECurve::ECurveP256, "97137674545862414485372913106719518332096267315416902201730528904183731761874", "87426651606086701008629633665535398077092750158068373881855238506228433010151", Some("90625108496000347380258537061455589299070717029212144039681325579070783497755"), false);
+        let key = JwtEcKeyInner::from_params(
+            ECurve::ECurveP256,
+            "97137674545862414485372913106719518332096267315416902201730528904183731761874",
+            "87426651606086701008629633665535398077092750158068373881855238506228433010151",
+            Some("90625108496000347380258537061455589299070717029212144039681325579070783497755"),
+            false,
+        );
         assert!(key.is_ok());
         let key = key.unwrap();
         assert_eq!(None, key.private_key_jwk());

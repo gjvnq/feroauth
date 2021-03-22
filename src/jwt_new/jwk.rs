@@ -3,6 +3,46 @@ use ring::digest::{digest, SHA256};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(into = "&str", try_from = "&str")]
+pub enum JwkUse {
+    Sig,
+    Enc,
+}
+
+impl JwkUse {
+    fn to_str(&self) -> &'static str {
+        match self {
+            JwkUse::Sig => "sig",
+            JwkUse::Enc => "enc",
+        }
+    }
+}
+
+impl std::convert::From<JwkUse> for &str {
+    fn from(val: JwkUse) -> Self {
+        val.to_str()
+    }
+}
+
+impl std::convert::TryFrom<&str> for JwkUse {
+    type Error = JwtError;
+
+    fn try_from(val: &str) -> Result<Self, JwtError> {
+        match val {
+            "sig" => Ok(JwkUse::Sig),
+            "enc" => Ok(JwkUse::Enc),
+            _ => Err(JwtError::new(JwtErrorInner::UnknownKeyUse(val.to_string()))),
+        }
+    }
+}
+
+impl std::fmt::Display for JwkUse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(into = "&str", try_from = "&str")]
 pub enum JKeyType {
     JTypeEc,
     JTypeRsa,
@@ -186,20 +226,7 @@ impl JwtAlgorithm {
     }
 
     pub(crate) fn to_hasher(&self) -> JwtResult<SslHasher> {
-        match self {
-            JwtAlgorithm::HS256 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::HS384 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::HS512 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::ES256 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::ES384 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::ES512 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::RS256 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::RS384 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::RS512 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::PS256 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::PS384 => Ok(SslHasher::new(self.to_md())?),
-            JwtAlgorithm::PS512 => Ok(SslHasher::new(self.to_md())?),
-        }
+        Ok(SslHasher::new(self.to_md())?)
     }
 
     pub(crate) fn to_md(&self) -> MessageDigest {

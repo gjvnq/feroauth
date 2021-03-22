@@ -1,8 +1,9 @@
+use crate::jwt_new::JwkUse;
 use crate::jwt_new::JwtAlgorithm;
 use core::panic::Location;
 use openssl::error::ErrorStack as SslErrorStackReal;
-use std::string::FromUtf8Error;
 use serde_json::error::Error as SerdeJsonErrorReal;
+use std::string::FromUtf8Error;
 
 pub type JwtResult<T> = Result<T, JwtError>;
 
@@ -25,7 +26,17 @@ pub enum JwtErrorInner {
     UnknownKeyType(String),
     InvalidKey(String),
     NoPrivateKeyForPubKey(String),
-    InvalidSignature(String, String, String), // kid, data hash, sig
+    InvalidSignature {
+        kid: String,
+        data: String,
+        sig: String,
+    },
+    UnknownKeyUse(String),
+    NoSuchKey {
+        kid: Option<String>,
+        alg: Option<JwtAlgorithm>,
+        kind: Option<JwkUse>,
+    },
     SerdeJson(SerdeJsonErrorReal),
     BigNumParseFail(String, String),
     Utf8Error(FromUtf8Error),
