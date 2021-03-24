@@ -4,6 +4,7 @@ use crate::jwt_new::*;
 #[derive(Debug, Clone)]
 pub struct JwtSymetricKeyInner {
     alg: JwtAlgorithm,
+    kind: JwkUse,
     /// [`None`] if non exportable
     private_jwk: Option<JwkRepr>,
     thumbprint_sha256: String,
@@ -14,6 +15,9 @@ pub struct JwtSymetricKeyInner {
 impl JwKeyTraitLowLevel for JwtSymetricKeyInner {
     fn algorithm(&self) -> JwtAlgorithm {
         self.algorithm()
+    }
+    fn kind(&self) -> JwkUse {
+        self.kind()
     }
     fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>> {
         self.sign_data(data)
@@ -38,6 +42,9 @@ impl JwKeyTraitLowLevel for JwtSymetricKeyInner {
 impl JwtSymetricKeyInner {
     pub fn algorithm(&self) -> JwtAlgorithm {
         self.alg
+    }
+    pub fn kind(&self) -> JwkUse {
+        self.kind
     }
 
     pub fn key_type(&self) -> JKeyType {

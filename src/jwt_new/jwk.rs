@@ -245,6 +245,23 @@ impl JwtAlgorithm {
             JwtAlgorithm::PS512 => MessageDigest::sha512(),
         }
     }
+
+    pub fn is_asymmetric(&self) -> bool {
+        match self {
+            JwtAlgorithm::HS256 => false,
+            JwtAlgorithm::HS384 => false,
+            JwtAlgorithm::HS512 => false,
+            JwtAlgorithm::ES256 => true,
+            JwtAlgorithm::ES384 => true,
+            JwtAlgorithm::ES512 => true,
+            JwtAlgorithm::RS256 => true,
+            JwtAlgorithm::RS384 => true,
+            JwtAlgorithm::RS512 => true,
+            JwtAlgorithm::PS256 => true,
+            JwtAlgorithm::PS384 => true,
+            JwtAlgorithm::PS512 => true,
+        }
+    }
 }
 
 impl std::convert::TryFrom<&str> for JwtAlgorithm {
@@ -381,7 +398,7 @@ impl JwkRepr {
     pub fn thumbprint_sha256(&self) -> String {
         let cannonical = self.rfc_7638();
         let hash = digest(&SHA256, cannonical.as_bytes());
-        base64::encode(hash)
+        base64::encode_config(hash, base64::URL_SAFE_NO_PAD)
     }
 
     // Checks if there is missing information. Returns false if something is missing
@@ -392,6 +409,10 @@ impl JwkRepr {
             Some(JTypeOct) => self.k.is_some(),
             _ => false,
         }
+    }
+
+    pub fn to_json(&self) -> JwtResult<String> {
+        Ok(serde_json::to_string(self)?)
     }
 }
 

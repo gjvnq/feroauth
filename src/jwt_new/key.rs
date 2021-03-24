@@ -12,8 +12,13 @@ pub enum JwKey {
 
 impl JwKey {
     #[allow(unused, unused_variables)]
-    pub fn generate(alg: JwtAlgorithm) {
-        todo!()
+    pub fn generate(alg: JwtAlgorithm, exportable: bool) -> JwtResult<Self> {
+        if alg.is_asymmetric() {
+            let inner = JwtAsymmetricKeyInner::generate(alg, exportable)?;
+            Ok(JwKey::JwtAsymmetricKey(inner))
+        } else {
+            unimplemented!()
+        }
     }
 
     #[allow(unused, unused_variables)]
@@ -29,6 +34,7 @@ impl JwKey {
 
 pub(crate) trait JwKeyTraitLowLevel {
     fn algorithm(&self) -> JwtAlgorithm;
+    fn kind(&self) -> JwkUse;
     fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>>;
     fn verify_data(&self, data: &[u8], sig: &[u8]) -> JwtResult<()>;
     fn private_key_jwk(&self) -> Option<&JwkRepr>;
@@ -48,6 +54,11 @@ impl JwKey {
     #[allow(unused)]
     pub fn algorithm(&self) -> JwtAlgorithm {
         self.as_trait().algorithm()
+    }
+
+    #[allow(unused)]
+    pub fn kind(&self) -> JwkUse {
+        self.as_trait().kind()
     }
 
     #[allow(unused)]
@@ -95,5 +106,13 @@ impl JwKey {
     /// Returns [`None`] for symmetric keys
     pub fn private_key_jwk(&self) -> Option<&JwkRepr> {
         self.as_trait().private_key_jwk()
+    }
+
+    pub fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>> {
+        self.as_trait().sign_data(data)
+    }
+
+    pub fn verify_data(&self, data: &[u8], sig: &[u8]) -> JwtResult<()> {
+        self.as_trait().verify_data(data, sig)
     }
 }

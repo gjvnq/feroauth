@@ -39,6 +39,7 @@ pub enum JwtErrorInner {
     },
     B64ParseError(B64DecodeErrorReal),
     SerdeJson(SerdeJsonErrorReal),
+    MalformedToken(&'static str, String),
     BigNumParseFail(String, String),
     Utf8Error(FromUtf8Error),
     Panic(&'static str, Option<String>),

@@ -13,11 +13,14 @@ pub use openssl::rsa::Rsa as SslRsaKey;
 pub use openssl::sign::{Signer as SslSigner, Verifier as SslVerifier};
 pub use serde::de::DeserializeOwned;
 pub use serde::{Deserialize, Serialize};
+pub use serde_json::value::Value as JsonValue;
 pub use serde_json::Result as JSResult;
 pub use serde_json::Value as JSValue;
 pub use std::convert::TryFrom;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[track_caller]
+#[allow(unused)]
 pub(crate) fn dec_to_bn(n: &str) -> JwtResult<BigNum> {
     match BigNum::from_dec_str(n) {
         Ok(bn) => Ok(bn),
@@ -49,4 +52,16 @@ pub(crate) fn option_b64_to_bn(num_str: Option<&str>) -> JwtResult<Option<BigNum
         Some(num_str) => b64_to_bn(num_str).map(|bn| Some(bn)),
         None => Ok(None),
     }
+}
+
+pub(crate) fn get_time() -> u64 {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    since_the_epoch.as_secs()
+}
+
+pub(crate) fn u64_to_json_value(num: u64) -> JsonValue {
+    JsonValue::Number(serde_json::Number::from(num))
 }

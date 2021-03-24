@@ -109,7 +109,7 @@ impl JwtAsymmetricKeyInner {
     fn verify_data(&self, data: &[u8], sig: &[u8]) -> JwtResult<()> {
         let sig = match self.key_type() {
             JKeyType::JTypeEc => ecdsa_plain2der(sig)?,
-            _ => sig.to_vec()
+            _ => sig.to_vec(),
         };
 
         let pk = &self.key_pk;
@@ -431,22 +431,22 @@ fn ecdsa_der2plain(sig_der: &[u8]) -> JwtResult<Vec<u8>> {
     let mut r_final = vec![0; 32];
     let mut s_final = vec![0; 32];
 
-    let mut i = r_vec.len()-1;
-    let mut j = r_final.len()-1;
+    let mut i = r_vec.len() - 1;
+    let mut j = r_final.len() - 1;
     loop {
         r_final[j] = r_vec[i];
         if i == 0 || j == 0 {
-            break
+            break;
         }
         i -= 1;
         j -= 1;
     }
-    let mut i = s_vec.len()-1;
-    let mut j = s_final.len()-1;
+    let mut i = s_vec.len() - 1;
+    let mut j = s_final.len() - 1;
     loop {
         s_final[j] = s_vec[i];
         if i == 0 || j == 0 {
-            break
+            break;
         }
         i -= 1;
         j -= 1;
@@ -459,7 +459,10 @@ fn ecdsa_der2plain(sig_der: &[u8]) -> JwtResult<Vec<u8>> {
 
 fn ecdsa_plain2der(sig_plain: &[u8]) -> JwtResult<Vec<u8>> {
     if sig_plain.len() != 64 {
-        return Err(JwtError::new_panic_2("wrong length for EcDSA signature", Some(format!("wanted {} got {}", 64, sig_plain.len()))))
+        return Err(JwtError::new_panic_2(
+            "wrong length for EcDSA signature",
+            Some(format!("wanted {} got {}", 64, sig_plain.len())),
+        ));
     }
 
     let r_slice = &sig_plain[0..32];
