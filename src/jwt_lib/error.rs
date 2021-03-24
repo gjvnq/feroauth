@@ -1,5 +1,5 @@
-use crate::jwt_new::JwkUse;
-use crate::jwt_new::JwtAlgorithm;
+use crate::jwt_lib::JwkUse;
+use crate::jwt_lib::JwtAlgorithm;
 use base64::DecodeError as B64DecodeErrorReal;
 use core::panic::Location;
 use openssl::error::ErrorStack as SslErrorStackReal;

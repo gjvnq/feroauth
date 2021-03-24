@@ -1,5 +1,5 @@
 mod jwt;
-mod jwt_new;
+mod jwt_lib;
 mod misc;
 mod model;
 mod prelude;

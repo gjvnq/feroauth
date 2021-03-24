@@ -1,5 +1,5 @@
-use crate::jwt_new::prelude::*;
-use crate::jwt_new::*;
+use crate::jwt_lib::prelude::*;
+use crate::jwt_lib::*;
 use openssl::rsa::RsaPrivateKeyBuilder;
 
 const DEFAULT_RSA_KEY_SIZE: u32 = 2048;

@@ -1,7 +1,7 @@
-use crate::jwt_new::key_asymmetric::JwtAsymmetricKeyInner;
-use crate::jwt_new::key_symmetric::JwtSymetricKeyInner;
-use crate::jwt_new::prelude::*;
-use crate::jwt_new::*;
+use crate::jwt_lib::key_asymmetric::JwtAsymmetricKeyInner;
+use crate::jwt_lib::key_symmetric::JwtSymetricKeyInner;
+use crate::jwt_lib::prelude::*;
+use crate::jwt_lib::*;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

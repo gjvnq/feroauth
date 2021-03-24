@@ -1,4 +1,4 @@
-use crate::jwt_new::prelude::*;
+use crate::jwt_lib::prelude::*;
 use ring::digest::{digest, SHA256};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,6 +1,6 @@
-pub use crate::jwt_new::error::{JwtError, JwtErrorInner, JwtResult};
-pub use crate::jwt_new::jwk::{JwkUse, JwtAlgorithm};
-pub use crate::jwt_new::jwt::JwToken;
+pub use crate::jwt_lib::error::{JwtError, JwtErrorInner, JwtResult};
+pub use crate::jwt_lib::jwk::{JwkUse, JwtAlgorithm};
+pub use crate::jwt_lib::jwt::JwToken;
 use openssl::bn::BigNumRef;
 pub use openssl::bn::{BigNum, BigNumContext};
 pub use openssl::ec::EcGroup;

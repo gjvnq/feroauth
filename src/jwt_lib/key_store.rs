@@ -1,5 +1,5 @@
-use crate::jwt_new::prelude::*;
-use crate::jwt_new::*;
+use crate::jwt_lib::prelude::*;
+use crate::jwt_lib::*;
 use std::collections::HashMap;
 
 const DEFAULT_JWT_ALG: JwtAlgorithm = JwtAlgorithm::ES512;

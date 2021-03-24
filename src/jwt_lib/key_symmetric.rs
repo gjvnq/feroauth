@@ -1,5 +1,5 @@
-use crate::jwt_new::prelude::*;
-use crate::jwt_new::*;
+use crate::jwt_lib::prelude::*;
+use crate::jwt_lib::*;
 
 #[derive(Debug, Clone)]
 pub struct JwtSymetricKeyInner {
