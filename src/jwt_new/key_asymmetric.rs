@@ -7,6 +7,7 @@ const DEFAULT_RSA_KEY_SIZE: u32 = 2048;
 #[derive(Debug, Clone)]
 pub struct JwtAsymmetricKeyInner {
     alg: JwtAlgorithm,
+    kind: JwkUse,
     thumbprint_sha256: String,
     key_pk: PKey<Public>,
     pem_pk: String,
@@ -18,6 +19,9 @@ pub struct JwtAsymmetricKeyInner {
 impl JwKeyTraitLowLevel for JwtAsymmetricKeyInner {
     fn algorithm(&self) -> JwtAlgorithm {
         self.algorithm()
+    }
+    fn kind(&self) -> JwkUse {
+        self.kind()
     }
     fn sign_data(&self, data: &[u8]) -> JwtResult<Vec<u8>> {
         self.sign_data(data)
@@ -42,6 +46,10 @@ impl JwKeyTraitLowLevel for JwtAsymmetricKeyInner {
 impl JwtAsymmetricKeyInner {
     pub fn algorithm(&self) -> JwtAlgorithm {
         self.alg
+    }
+
+    pub fn kind(&self) -> JwkUse {
+        self.kind
     }
 
     pub fn key_type(&self) -> JKeyType {
@@ -90,13 +98,23 @@ impl JwtAsymmetricKeyInner {
         };
         let mut signer = SslSigner::new(self.algorithm().to_md(), sk)?;
         let ans = signer.sign_oneshot_to_vec(data)?;
-        Ok(ans)
+
+        if self.key_type() == JKeyType::JTypeEc {
+            Ok(ecdsa_der2plain(&ans)?)
+        } else {
+            Ok(ans)
+        }
     }
 
     fn verify_data(&self, data: &[u8], sig: &[u8]) -> JwtResult<()> {
+        let sig = match self.key_type() {
+            JKeyType::JTypeEc => ecdsa_plain2der(sig)?,
+            _ => sig.to_vec()
+        };
+
         let pk = &self.key_pk;
         let mut verifier = SslVerifier::new(self.algorithm().to_md(), pk)?;
-        match verifier.verify_oneshot(sig, data)? {
+        match verifier.verify_oneshot(&sig, data)? {
             true => Ok(()),
             false => {
                 // pretty print stuff and return the error
@@ -148,7 +166,7 @@ impl JwtAsymmetricKeyInner {
 
     fn ec_make_jwk_private(ans: &JwkRepr, key: &SslEcKey<Private>) -> JwkRepr {
         let mut ans = ans.clone();
-        ans.p = Some(bn_to_b64(key.private_key()));
+        ans.d = Some(bn_to_b64(key.private_key()));
         ans
     }
 
@@ -218,6 +236,7 @@ impl JwtAsymmetricKeyInner {
 
         Ok(JwtAsymmetricKeyInner {
             alg: alg,
+            kind: JwkUse::Sig,
             thumbprint_sha256: jwk_pk.thumbprint_sha256(),
             key_pk: PKey::from_rsa(rsa_pk)?,
             jwk_pem: jwk_pk,
@@ -292,6 +311,7 @@ impl JwtAsymmetricKeyInner {
 
         Ok(JwtAsymmetricKeyInner {
             alg: alg,
+            kind: JwkUse::Sig,
             thumbprint_sha256: jwk_pk.thumbprint_sha256(),
             key_pk: PKey::from_rsa(rsa_pk)?,
             jwk_pem: jwk_pk,
@@ -330,6 +350,7 @@ impl JwtAsymmetricKeyInner {
 
         Ok(JwtAsymmetricKeyInner {
             alg: crv.to_alg(),
+            kind: JwkUse::Sig,
             thumbprint_sha256: jwk_pk.thumbprint_sha256(),
             key_pk: PKey::from_ec_key(ecc_pk)?,
             jwk_pem: jwk_pk,
@@ -387,6 +408,7 @@ impl JwtAsymmetricKeyInner {
 
         Ok(JwtAsymmetricKeyInner {
             alg: crv.to_alg(),
+            kind: JwkUse::Sig,
             thumbprint_sha256: jwk_pem.thumbprint_sha256(),
             key_pk: PKey::from_ec_key(ecc_key)?,
             pem_pk,
@@ -395,6 +417,60 @@ impl JwtAsymmetricKeyInner {
             jwk_sk,
         })
     }
+}
+
+fn ecdsa_der2plain(sig_der: &[u8]) -> JwtResult<Vec<u8>> {
+    println!("{:?}", sig_der);
+    println!("{:?}", base64::encode(sig_der));
+
+    let sig_obj = openssl::ecdsa::EcdsaSig::from_der(sig_der)?;
+
+    let r_vec = sig_obj.r().to_vec();
+    let s_vec = sig_obj.s().to_vec();
+
+    let mut r_final = vec![0; 32];
+    let mut s_final = vec![0; 32];
+
+    let mut i = r_vec.len()-1;
+    let mut j = r_final.len()-1;
+    loop {
+        r_final[j] = r_vec[i];
+        if i == 0 || j == 0 {
+            break
+        }
+        i -= 1;
+        j -= 1;
+    }
+    let mut i = s_vec.len()-1;
+    let mut j = s_final.len()-1;
+    loop {
+        s_final[j] = s_vec[i];
+        if i == 0 || j == 0 {
+            break
+        }
+        i -= 1;
+        j -= 1;
+    }
+
+    let plain = [r_final, s_final].concat();
+
+    Ok(plain)
+}
+
+fn ecdsa_plain2der(sig_plain: &[u8]) -> JwtResult<Vec<u8>> {
+    if sig_plain.len() != 64 {
+        return Err(JwtError::new_panic_2("wrong length for EcDSA signature", Some(format!("wanted {} got {}", 64, sig_plain.len()))))
+    }
+
+    let r_slice = &sig_plain[0..32];
+    let s_slice = &sig_plain[32..64];
+
+    let r_bn = BigNum::from_slice(r_slice)?;
+    let s_bn = BigNum::from_slice(s_slice)?;
+
+    let sig_obj = openssl::ecdsa::EcdsaSig::from_private_components(r_bn, s_bn)?;
+
+    Ok(sig_obj.to_der()?)
 }
 
 #[cfg(test)]
@@ -416,7 +492,7 @@ mod tests {
             Some(JwkRepr {
                 crv: Some(ECurve::ECurveP256),
                 kty: Some(JKeyType::JTypeEc),
-                p: Some("F996fAciHB1q5Hu2ElijVrKNtdNzTADYyo31HPCG8PQ".to_string()),
+                d: Some("F996fAciHB1q5Hu2ElijVrKNtdNzTADYyo31HPCG8PQ".to_string()),
                 x: Some("GNJoNtvpSo5G-V4Dvn322vTtGo-TcOPN7PtRhZgeGPU".to_string()),
                 y: Some("UWl0nY5DZGUF8vsjysSNdPVbxG_pcIvDlrmJ2CKpobM".to_string()),
                 ..Default::default()
