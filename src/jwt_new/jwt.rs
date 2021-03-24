@@ -10,10 +10,10 @@ use std::convert::TryInto;
 // }
 #[derive(Debug, Clone)]
 pub struct JwToken<T> {
-    pub kid: String,
+    pub claims: T,
     pub kind: JwkUse,
     pub header: JwtHeader,
-    pub claims: T,
+    pub key_thumbprint: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,34 +61,34 @@ pub(crate) struct JwtBasicClaims {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aud: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub exp: Option<u64>,
+    pub exp: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub nbf: Option<u64>,
+    pub nbf: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum JwtTime {
-    Fixed(u64),
+    Fixed(i64),
     Duration(i64),
     Ignore,
 }
 
 impl JwtTime {
-    fn delta_plus_now(delta: i64, now: u64) -> u64 {
+    fn delta_plus_now(delta: i64, now: i64) -> i64 {
         let now: i64 = now.try_into().expect("time should be i64 representable");
         let ans = now + delta;
-        ans.try_into().expect("time should be u64 representable")
+        ans.try_into().expect("time should be i64 representable")
     }
 
     #[allow(unused)]
-    pub fn to_fixed(&self, now: u64) -> Self {
+    pub fn to_fixed(&self, now: i64) -> Self {
         match self {
             JwtTime::Duration(delta) => JwtTime::Fixed(JwtTime::delta_plus_now(*delta, now)),
             _ => *self,
         }
     }
 
-    pub fn to_u64(&self, now: u64) -> Option<u64> {
+    pub fn to_i64(&self, now: i64) -> Option<i64> {
         match self {
             JwtTime::Duration(delta) => Some(JwtTime::delta_plus_now(*delta, now)),
             JwtTime::Fixed(ans) => Some(*ans),
@@ -96,7 +96,7 @@ impl JwtTime {
         }
     }
 
-    pub(crate) fn to_json_value(&self, now: u64) -> Option<JsonValue> {
-        self.to_u64(now).map(|num| u64_to_json_value(num))
+    pub(crate) fn to_json_value(&self, now: i64) -> Option<JsonValue> {
+        self.to_i64(now).map(|num| i64_to_json_value(num))
     }
 }

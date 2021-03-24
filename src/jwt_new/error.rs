@@ -26,6 +26,11 @@ pub enum JwtErrorInner {
     UnknownKeyType(String),
     InvalidKey(String),
     NoPrivateKeyForPubKey(String),
+    TokenNotAfter(i64),
+    TokenNotBefore(i64),
+    InvalidSubject(String),
+    InvalidAudience(String),
+    InvalidIssuer(String),
     InvalidSignature {
         kid: String,
         data: String,

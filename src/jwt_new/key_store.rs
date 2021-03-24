@@ -21,8 +21,8 @@ pub struct JwKeyStore {
     pub default_iss: Option<String>,
 
     pub default_duration: Option<i64>,
-    /// How strict should the verification of deadlines be? (in seconds)
-    pub leeway: u64,
+    /// How strict should the verification of deadlines be? (in seconds, must be non-negative)
+    pub leeway: i64,
     /// If [`true`], the param `nbf` (not before) won't be checked.
     pub ignore_nbf: bool,
     /// If [`true`], the param `exp` (not after) won't be checked.
@@ -43,9 +43,9 @@ pub struct JwWrapedKey {
     // If [`None`], the `kid` will be SHA256 thumbprint (see RFC 7638)
     kid: Option<String>,
     /// Not Before (UNIX Timestamp in seconds)
-    nbf: Option<u64>,
+    nbf: Option<i64>,
     /// Not After (UNIX Timestamp in seconds)
-    exp: Option<u64>,
+    exp: Option<i64>,
     /// Key URL
     jku: Option<String>,
 }
@@ -61,7 +61,7 @@ impl JwWrapedKey {
     }
 
     #[allow(unused)]
-    pub fn is_valid(&self, now: u64) -> bool {
+    pub fn is_valid(&self, now: i64) -> bool {
         if self.nbf.is_some() && !(self.nbf.unwrap() <= now) {
             return false;
         }
@@ -87,8 +87,8 @@ impl JwKeyStore {
         &mut self,
         key: JwKey,
         kid: Option<&str>,
-        nbf: Option<u64>,
-        exp: Option<u64>,
+        nbf: Option<i64>,
+        exp: Option<i64>,
         jku: Option<&str>,
     ) -> JwtResult<String> {
         let val = JwWrapedKey {
@@ -115,7 +115,7 @@ impl JwKeyStore {
         kid: Option<&str>,
         alg: Option<JwtAlgorithm>,
         kind: JwkUse,
-        now: u64,
+        now: i64,
     ) -> Option<&JwWrapedKey> {
         for (_, wkey) in self.keys.iter() {
             if wkey.key.kind() != kind {
@@ -139,7 +139,7 @@ impl JwKeyStore {
         kid: Option<&str>,
         alg: Option<JwtAlgorithm>,
         kind: JwkUse,
-        now: u64,
+        now: i64,
     ) -> JwtResult<&JwWrapedKey> {
         match self.get_key(kid, alg, kind, now) {
             Some(wkey) => Ok(wkey),
@@ -151,7 +151,11 @@ impl JwKeyStore {
         }
     }
 
-    fn decode_and_check_sig(&self, now: u64, token: &str) -> JwtResult<(JwtHeader, String)> {
+    fn decode_and_check_sig(
+        &self,
+        now: i64,
+        token: &str,
+    ) -> JwtResult<(JwtHeader, String, String)> {
         let token = token.trim();
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
@@ -171,14 +175,57 @@ impl JwKeyStore {
         let sig = base64::decode_config(parts[2], base64::URL_SAFE_NO_PAD)?;
         wkey.key.verify_data(message.as_bytes(), &sig)?;
 
-        Ok((header, payload))
+        if header.crit.is_some() {
+            return Err(JwtError::new(JwtErrorInner::NotImplemented(
+                "`crit` header field".to_string(),
+            )));
+        }
+
+        Ok((header, wkey.key.thumbprint_sha256().to_string(), payload))
+    }
+
+    fn check_basic_claims(&self, now: i64, claims: &str) -> JwtResult<()> {
+        let claims: JwtBasicClaims = serde_json::from_str(&claims)?;
+        if let Some(exp) = claims.exp {
+            if !self.ignore_exp && now < exp + self.leeway {
+                return Err(JwtError::new(JwtErrorInner::TokenNotAfter(exp)));
+            }
+        }
+        if let Some(nbf) = claims.nbf {
+            if !self.ignore_nbf && nbf < now - self.leeway {
+                return Err(JwtError::new(JwtErrorInner::TokenNotBefore(nbf)));
+            }
+        }
+        if let Some(ok_sub) = &self.sub {
+            if let Some(sub) = claims.sub {
+                if !ok_sub.contains(&sub) {
+                    return Err(JwtError::new(JwtErrorInner::InvalidSubject(sub)));
+                }
+            }
+        }
+        if let Some(ok_aud) = &self.aud {
+            if let Some(aud) = claims.aud {
+                if !ok_aud.contains(&aud) {
+                    return Err(JwtError::new(JwtErrorInner::InvalidAudience(aud)));
+                }
+            }
+        }
+        if let Some(ok_iss) = &self.iss {
+            if let Some(iss) = claims.iss {
+                if !ok_iss.contains(&iss) {
+                    return Err(JwtError::new(JwtErrorInner::InvalidIssuer(iss)));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     // panics if the key does not exist
     fn actual_make_token(
         &self,
         thumbprint: &str,
-        now: u64,
+        now: i64,
         nbf: JwtTime,
         exp: JwtTime,
         aud: Option<&str>,
@@ -223,7 +270,7 @@ impl JwKeyStore {
         if let Some(aud) = aud {
             claims_map.insert("aud".to_string(), JsonValue::String(aud.to_string()));
         }
-        claims_map.insert("iat".to_string(), u64_to_json_value(now));
+        claims_map.insert("iat".to_string(), i64_to_json_value(now));
 
         let claims_str = serde_json::to_string(&claims_map)?;
         let claims_b64 = base64::encode_config(claims_str, base64::URL_SAFE_NO_PAD);
@@ -236,57 +283,73 @@ impl JwKeyStore {
         Ok(jwt)
     }
 
-    // pub fn make_token(
-    //     &self,
-    //     kid: Option<&str>,
-    //     alg: Option<JwtAlgorithm>,
-    //     kind: Option<JwkUse>,
-    //     claims: impl Serialize,
-    // ) -> JwtResult<String> {
-    //     let kind_unwrap = kind.unwrap_or(JwkUse::Sig);
-    //     let now = get_time();
-    //     let key = match self.get_key(kid, alg, kind_unwrap, now) {
-    //         Some(key) => key,
-    //         None => {
-    //             let kid = kid.map(|s| s.to_string());
-    //             return Err(JwtError::new(JwtErrorInner::NoSuchKey {
-    //                 kid: kid.clone(),
-    //                 alg: alg,
-    //                 kind: kind,
-    //             }));
-    //         }
-    //     };
-    //     self.actual_make_token(key.kid_or_thumbprint(), now, claims)
-    // }
+    pub fn make_token(
+        &self,
+        kid: Option<&str>,
+        alg: Option<JwtAlgorithm>,
+        kind: Option<JwkUse>,
+        aud: Option<&str>,
+        claims: impl Serialize,
+    ) -> JwtResult<String> {
+        let kind_unwrap = kind.unwrap_or(JwkUse::Sig);
+        let now = get_time();
+        let key = match self.get_key(kid, alg, kind_unwrap, now) {
+            Some(key) => key,
+            None => {
+                let kid = kid.map(|s| s.to_string());
+                return Err(JwtError::new(JwtErrorInner::NoSuchKey {
+                    kid: kid.clone(),
+                    alg: alg,
+                    kind: kind,
+                }));
+            }
+        };
 
-    // /// The same as [`JwKeyStore::make_token`] but will auto generate a new key if needed.
-    // #[allow(unused)]
-    // pub fn make_token_autogen(
-    //     &mut self,
-    //     kid: Option<&str>,
-    //     alg: Option<JwtAlgorithm>,
-    //     kind: Option<JwkUse>,
-    //     claims: impl Serialize,
-    // ) -> JwtResult<String> {
-    //     let kind = kind.unwrap_or(JwkUse::Sig);
-    //     let now = get_time();
-    //     let key = self.get_key(kid, alg, kind, now);
-    //     if key.is_none() && self.auto_generate {
-    //         let alg = alg.unwrap_or(DEFAULT_JWT_ALG);
-    //         let key = JwKey::generate(alg, true)?;
-    //         let thumbprint = key.thumbprint_sha256();
-    //         let kid = self.add_key(key, None, Some(now), None, None)?;
+        self.actual_make_token(key.kid_or_thumbprint(), now, JwtTime::Fixed(now), JwtTime::Ignore, aud, claims)
+    }
 
-    //         self.actual_make_token(&kid, now, claims)
-    //     } else {
-    //         let kid = key.unwrap().kid_or_thumbprint();
-    //         self.actual_make_token(&kid, now, claims)
-    //     }
-    // }
+    /// The same as [`JwKeyStore::make_token`] but will auto generate a new key if needed.
+    #[allow(unused)]
+    pub fn make_token_autogen(
+        &mut self,
+        kid: Option<&str>,
+        alg: Option<JwtAlgorithm>,
+        kind: Option<JwkUse>,
+        aud: Option<&str>,
+        claims: impl Serialize,
+    ) -> JwtResult<String> {
+        let kind = kind.unwrap_or(JwkUse::Sig);
+        let now = get_time();
+        let key = self.get_key(kid, alg, kind, now);
+        if key.is_none() && self.auto_generate {
+            let alg = alg.unwrap_or(DEFAULT_JWT_ALG);
+            let key = JwKey::generate(alg, true)?;
+            let thumbprint = key.thumbprint_sha256();
+            let kid = self.add_key(key, None, Some(now), None, None)?;
+
+            self.actual_make_token(&kid, now, JwtTime::Fixed(now), JwtTime::Ignore, aud, claims)
+        } else {
+            let kid = key.unwrap().kid_or_thumbprint();
+            self.actual_make_token(&kid, now, JwtTime::Fixed(now), JwtTime::Ignore, aud, claims)
+        }
+    }
 
     #[allow(unused)]
-    pub fn parse_token<T>(&self, kid: &str, token: &str) -> JwtResult<JwToken<T>> {
-        todo!()
+    pub fn parse_token<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+    ) -> JwtResult<JwToken<T>> {
+        let now = get_time();
+        let (header, key_thumbprint, claims_str) = self.decode_and_check_sig(now, token)?;
+        self.check_basic_claims(now, &claims_str)?;
+        let claims = serde_json::from_str(&claims_str)?;
+
+        Ok(JwToken {
+            claims: claims,
+            kind: JwkUse::Sig,
+            header: header,
+            key_thumbprint: key_thumbprint,
+        })
     }
 }
 
@@ -362,8 +425,58 @@ mod tests {
                     kid: Some("EetPnG_8waks8nK7wjSaE8xjEV4DzCamfsoAmSyRRno".to_string()),
                     ..Default::default()
                 },
+                "EetPnG_8waks8nK7wjSaE8xjEV4DzCamfsoAmSyRRno".to_string(),
                 "{\"data\":\"hello\",\"exp\":301,\"iat\":1}".to_string()
             )
+        );
+    }
+
+    #[test]
+    fn test_parse_token() {
+        let mut store = JwKeyStore {
+            ..Default::default()
+        };
+        let ikey = JwtAsymmetricKeyInner::from_params_ec(
+            ECurve::ECurveP256,
+            "GNJoNtvpSo5G-V4Dvn322vTtGo-TcOPN7PtRhZgeGPU=",
+            "UWl0nY5DZGUF8vsjysSNdPVbxG_pcIvDlrmJ2CKpobM=",
+            None,
+            true,
+        )
+        .unwrap();
+        let key = JwKey::JwtAsymmetricKey(ikey);
+        store.add_key(key, None, None, None, None).unwrap();
+
+        let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6IkVldFBuR184d2FrczhuSzd3alNhRTh4akVWNER6Q2FtZnNvQW1TeVJSbm8ifQ.eyJkYXRhIjoiaGVsbG8iLCJleHAiOjMwMSwiaWF0IjoxfQ.bQMMxgRCWnbjyGK5Vsq7CSi8iy09hcHudB-4l3hZNa-b4DjPoDTklwybNZxb18iuInqVybN66GRir_LHtiSXDw";
+        let check = store.parse_token::<JwtBasicClaims>(token).unwrap();
+        println!("{:?}", check);
+        assert_eq!(
+            check.claims,
+            JwtBasicClaims {
+                sub: None,
+                iss: None,
+                aud: None,
+                exp: Some(301),
+                nbf: None
+            }
+        );
+        assert_eq!(check.kind, JwkUse::Sig);
+        assert_eq!(
+            check.header,
+            JwtHeader {
+                typ: Some("JWT".to_string()),
+                crit: None,
+                alg: Some(JwtAlgorithm::ES256),
+                cty: None,
+                jku: None,
+                kid: Some("EetPnG_8waks8nK7wjSaE8xjEV4DzCamfsoAmSyRRno".to_string()),
+                x5u: None,
+                x5t: None
+            }
+        );
+        assert_eq!(
+            check.key_thumbprint,
+            "EetPnG_8waks8nK7wjSaE8xjEV4DzCamfsoAmSyRRno".to_string()
         );
     }
 }

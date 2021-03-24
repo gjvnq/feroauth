@@ -54,14 +54,19 @@ pub(crate) fn option_b64_to_bn(num_str: Option<&str>) -> JwtResult<Option<BigNum
     }
 }
 
-pub(crate) fn get_time() -> u64 {
+pub(crate) fn get_time() -> i64 {
+    use std::convert::TryInto;
+
     let start = SystemTime::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    since_the_epoch.as_secs()
+    since_the_epoch
+        .as_secs()
+        .try_into()
+        .expect("Time should fit i64")
 }
 
-pub(crate) fn u64_to_json_value(num: u64) -> JsonValue {
+pub(crate) fn i64_to_json_value(num: i64) -> JsonValue {
     JsonValue::Number(serde_json::Number::from(num))
 }
