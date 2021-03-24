@@ -1,5 +1,6 @@
 use crate::jwt_new::JwkUse;
 use crate::jwt_new::JwtAlgorithm;
+use base64::DecodeError as B64DecodeErrorReal;
 use core::panic::Location;
 use openssl::error::ErrorStack as SslErrorStackReal;
 use serde_json::error::Error as SerdeJsonErrorReal;
@@ -17,8 +18,7 @@ pub struct JwtError {
 
 #[derive(Debug)]
 pub enum JwtErrorInner {
-    #[allow(unused)]
-    NotImplemented,
+    NotImplemented(String),
     SslErrorStack(SslErrorStackReal),
     AlgHasNoCurveType(JwtAlgorithm),
     UnknownAlg(String),
@@ -37,6 +37,7 @@ pub enum JwtErrorInner {
         alg: Option<JwtAlgorithm>,
         kind: Option<JwkUse>,
     },
+    B64ParseError(B64DecodeErrorReal),
     SerdeJson(SerdeJsonErrorReal),
     BigNumParseFail(String, String),
     Utf8Error(FromUtf8Error),
@@ -107,6 +108,19 @@ impl std::convert::From<SerdeJsonErrorReal> for JwtError {
             line: loc.line(),
             col: loc.column(),
             inner: JwtErrorInner::SerdeJson(err),
+        }
+    }
+}
+
+impl std::convert::From<B64DecodeErrorReal> for JwtError {
+    #[track_caller]
+    fn from(err: B64DecodeErrorReal) -> Self {
+        let loc = Location::caller();
+        JwtError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: JwtErrorInner::B64ParseError(err),
         }
     }
 }
