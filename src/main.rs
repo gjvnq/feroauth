@@ -48,14 +48,17 @@ async fn main() -> FResult<()> {
         model::db::DB_POOL = Some(db_pool.clone());
     }
 
-    let jwt_maker = jwt::JwtMaker::new().unwrap();
-    debug!("JWT KEY PEM: {}", jwt_maker.public_key_pem());
+    // let jwt_key_pem = env::var("JWY_KEY_PEM").expect("JWY_KEY_PEM is not set in .env file");
+    let mut key_store = jwt_lib::JwKeyStore::new();
+    let key = jwt_lib::JwKey::generate(jwt_lib::JwtAlgorithm::ES256, true)?;
+    println!("JWT KEY: {}", key.private_key_jwk().unwrap().to_json()?);
+    key_store.add_key(key, None, None, None, None)?;
 
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
                 db: db_pool.clone(),
-                jwt: jwt_maker.clone(),
+                jwt: key_store.clone(),
             })
             // add cookies
             .wrap(
@@ -64,11 +67,14 @@ async fn main() -> FResult<()> {
                     .http_only(true)
                     .secure(false),
             )
+            .wrap(
+                crate::jwt::JwtAuth::<MinSession>::new(key_store.clone())
+            )
             .service(index)
-            .service(jwt::keys_endpoint)
+            // .service(jwt::keys_endpoint)
             .service(jwt::validate_endpoint)
             .service(users::login_endpoint)
-            .service(users::get_user_endpoint)
+            // .service(users::get_user_endpoint)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

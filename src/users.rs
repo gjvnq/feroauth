@@ -41,7 +41,7 @@ impl LoginResponse {
 
 #[post("/login")]
 async fn login_endpoint(
-    data: web::Data<AppState<'_>>,
+    data: web::Data<AppState>,
     info: web::Json<LoginRequest>,
     req: HttpRequest,
 ) -> FResult<HttpResponse> {
@@ -134,7 +134,7 @@ async fn login_endpoint(
         session.save(&mut tx).await?;
         tx.commit().await?;
 
-        ans.jwt = Some(data.jwt.encode(session.to_claims())?);
+        // ans.jwt = Some(data.jwt.encode(session.to_claims())?);
 
         debug!(
             "{} - Finished login for {:?}",
@@ -147,20 +147,20 @@ async fn login_endpoint(
     }
 }
 
-#[get("/users/{uuid}")]
-async fn get_user_endpoint(
-    data: web::Data<AppState<'_>>,
-    auth: BearerAuth,
-    path: web::Path<String>,
-) -> FResult<HttpResponse> {
-    let token = decode_and_refresh_session(&data, &auth).await?;
-    debug!("{:?}", token);
+// #[get("/users/{uuid}")]
+// async fn get_user_endpoint(
+//     data: web::Data<AppState>,
+//     auth: BearerAuth,
+//     path: web::Path<String>,
+// ) -> FResult<HttpResponse> {
+//     let token = decode_and_refresh_session(&data, &auth).await?;
+//     debug!("{:?}", token);
 
-    // TODO: check permission
-    debug!("{:?}", path);
-    let uuid = parse_uuid_str(&path)?;
-    let mut tx = data.db.begin().await.unwrap();
-    let user = User::load_by_uuid(uuid, &mut tx).await?;
+//     // TODO: check permission
+//     debug!("{:?}", path);
+//     let uuid = parse_uuid_str(&path)?;
+//     let mut tx = data.db.begin().await.unwrap();
+//     let user = User::load_by_uuid(uuid, &mut tx).await?;
 
-    return Ok(HttpResponse::Ok().json(user));
-}
+//     return Ok(HttpResponse::Ok().json(user));
+// }

@@ -21,7 +21,7 @@ pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
 pub use actix_session::{CookieSession, Session};
 
-use jsonwebtoken::errors::Error as JwtErrorReal;
+use crate::jwt_lib::JwtError as JwtErrorReal;
 use openssl::error::ErrorStack as SslErrorStackReal;
 
 pub use qstring::QString;
@@ -135,21 +135,22 @@ impl FError {
     }
 
     pub fn is_unauthorized(&self) -> bool {
-        use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
-        match &self.inner {
-            JwtError(err) => match err.kind() {
-                JwtErrorKind::InvalidToken => true,
-                JwtErrorKind::InvalidSignature => true,
-                JwtErrorKind::ExpiredSignature => true,
-                JwtErrorKind::InvalidIssuer => true,
-                JwtErrorKind::InvalidAudience => true,
-                JwtErrorKind::InvalidSubject => true,
-                JwtErrorKind::ImmatureSignature => true,
-                JwtErrorKind::InvalidAlgorithm => true,
-                _ => false,
-            },
-            _ => false,
-        }
+        return false
+        // use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
+        // match &self.inner {
+        //     JwtError(err) => match err.kind() {
+        //         JwtErrorKind::InvalidToken => true,
+        //         JwtErrorKind::InvalidSignature => true,
+        //         JwtErrorKind::ExpiredSignature => true,
+        //         JwtErrorKind::InvalidIssuer => true,
+        //         JwtErrorKind::InvalidAudience => true,
+        //         JwtErrorKind::InvalidSubject => true,
+        //         JwtErrorKind::ImmatureSignature => true,
+        //         JwtErrorKind::InvalidAlgorithm => true,
+        //         _ => false,
+        //     },
+        //     _ => false,
+        // }
     }
 }
 

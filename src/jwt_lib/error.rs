@@ -42,6 +42,7 @@ pub enum JwtErrorInner {
         alg: Option<JwtAlgorithm>,
         kind: Option<JwkUse>,
     },
+    TokenNotPresent,
     B64ParseError(B64DecodeErrorReal),
     SerdeJson(SerdeJsonErrorReal),
     MalformedToken(&'static str, String),

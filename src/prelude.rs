@@ -12,9 +12,9 @@ pub use crate::model::{Password, User};
 
 pub use jsonwebtoken::Algorithm as JwtAlgorithm;
 
-pub struct AppState<'a> {
+pub struct AppState {
     pub db: sqlx::Pool<sqlx::MySql>,
-    pub jwt: crate::jwt::JwtMaker<'a>,
+    pub jwt: crate::jwt_lib::JwKeyStore,
 }
 
 pub fn get_ip(req: &HttpRequest) -> (String, String) {
@@ -27,11 +27,11 @@ pub fn get_ip(req: &HttpRequest) -> (String, String) {
     (ip_addr_real, ip_addr_peer)
 }
 
-pub async fn decode_and_refresh_session(
-    data: &AppState<'_>,
-    auth: &BearerAuth,
-) -> FResult<MinSession> {
-    let token = data.jwt.decode_session(auth)?;
-    token.refresh(&data.db).await?;
-    Ok(token)
-}
+// pub async fn decode_and_refresh_session(
+//     data: &AppState,
+//     auth: &BearerAuth,
+// ) -> FResult<MinSession> {
+//     let token = data.jwt.decode_session(auth)?;
+//     token.refresh(&data.db).await?;
+//     Ok(token)
+// }

@@ -34,20 +34,20 @@ pub struct JwKeyStore {
     /// If [`true`], new keys will be generated as needed.
     pub auto_generate: bool,
     // /// Function to call when a new key is generated
-    // callback_new_key: fn(new_key: &JwWrapedKey)
+    // callback_new_key: Option<fn(new_key: &JwWrapedKey)>
 }
 
 #[derive(Debug, Clone)]
 pub struct JwWrapedKey {
-    key: JwKey,
+    pub key: JwKey,
     // If [`None`], the `kid` will be SHA256 thumbprint (see RFC 7638)
-    kid: Option<String>,
+    pub kid: Option<String>,
     /// Not Before (UNIX Timestamp in seconds)
-    nbf: Option<i64>,
+    pub nbf: Option<i64>,
     /// Not After (UNIX Timestamp in seconds)
-    exp: Option<i64>,
+    pub exp: Option<i64>,
     /// Key URL
-    jku: Option<String>,
+    pub jku: Option<String>,
 }
 
 impl JwWrapedKey {
@@ -82,6 +82,10 @@ impl JwWrapedKey {
 }
 
 impl JwKeyStore {
+    pub fn new() -> Self {
+        JwKeyStore{..Default::default()}
+    }
+
     #[allow(unused)]
     pub fn add_key(
         &mut self,
