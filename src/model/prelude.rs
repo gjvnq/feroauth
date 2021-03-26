@@ -80,6 +80,7 @@ pub enum FErrorInner {
     SQLError(SQLErrorReal),
     IOError(IOErrorReal),
     // InvalidValue(InvalidValue),
+    StaleSession(Uuid),
     UuidParseError(String),
     ArgoError(ArgoErrorReal),
     SslErrorStack(SslErrorStackReal),

@@ -1,4 +1,4 @@
-mod jwt;
+mod auth;
 mod jwt_lib;
 mod misc;
 mod model;
@@ -10,6 +10,7 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
+use std::sync::Arc;
 use crate::prelude::*;
 use hex::FromHex;
 
@@ -40,9 +41,6 @@ async fn main() -> FResult<()> {
     let db_pass = env::var("DB_PASS").expect("DB_PASS is not set in .env file");
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
-    let cookie_key =
-        <[u8; 32]>::from_hex(env::var("COOKIE_KEY").expect("COOKIE_KEY is not set in .env file"))
-            .expect("COOKIE_KEY must be exactly a 32 bytes hex encoded string");
 
     unsafe {
         model::db::DB_POOL = Some(db_pool.clone());
@@ -61,18 +59,18 @@ async fn main() -> FResult<()> {
                 jwt: key_store.clone(),
             })
             // add cookies
+            // .wrap(
+            //     CookieSession::signed(&cookie_key)
+            //         .name("feroauth")
+            //         .http_only(true)
+            //         .secure(false),
+            // )
             .wrap(
-                CookieSession::signed(&cookie_key)
-                    .name("feroauth")
-                    .http_only(true)
-                    .secure(false),
-            )
-            .wrap(
-                crate::jwt::JwtAuth::<MinSession>::new(key_store.clone())
+                crate::auth::SessionAuth::new("feroauth", Arc::new(db_pool.clone()))
             )
             .service(index)
             // .service(jwt::keys_endpoint)
-            .service(jwt::validate_endpoint)
+            .service(auth::validate_endpoint)
             .service(users::login_endpoint)
             // .service(users::get_user_endpoint)
     });

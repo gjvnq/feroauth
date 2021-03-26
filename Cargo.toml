@@ -8,12 +8,14 @@ categories = ["authentication", "web-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = "3"
+actix-service = "1.0.6"
+actix-web = { version = "3", features = ["secure-cookies", "compress", "openssl"] }
+cookie = { version = "0.14", features = ["secure", "percent-encode"] }
 jsonwebtoken = "7"
 actix-session = "0.4.0"
 argonautica = { version = "0.2", features = ["serde"] }
-tokio = { version = "0.2.24", features = [ "full" ] }
-sqlx = { version = "0.4.2", features = [ "runtime-tokio-rustls", "mysql", "uuid", "chrono", "macros", "uuid" ] }
+tokio = { version = "0.2.24", features = ["full"] }
+sqlx = { version = "0.4.2", features = ["runtime-tokio-rustls", "mysql", "uuid", "chrono", "macros", "uuid"] }
 fern = { version = "0.6.0", features = ["colored"] }
 log = "0.4.11"
 toml = "0.5"

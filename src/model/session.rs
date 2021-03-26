@@ -1,3 +1,8 @@
+use std::sync::Arc;
+use futures_util::future::Ready;
+use actix_web::Error as AWError;
+use actix_web::FromRequest;
+use actix_web::dev::Payload;
 use crate::model::prelude::*;
 use crate::model::user::{MinUser, User};
 use chrono::Duration;
@@ -86,6 +91,11 @@ impl FullSession {
         return self.last_used.clone() + duration;
     }
 
+    pub fn is_valid(&self) -> bool {
+        let now = Utc::now();
+        now <= self.valid_until() 
+    }
+
     #[allow(unused)]
     pub fn new(
         user: &MinUser,
@@ -126,11 +136,25 @@ impl FullSession {
         Ok(())
     }
 
-    /// If `refresh` is true (as it almost always should), the session's valid until time will be extended if needed.
+    pub async fn safe_load_by_uuid(uuid: Uuid, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> FResult<FullSession> {
+        let mut tx = db_pool.begin().await?;
+        let mut ans = FullSession::unsafe_load_by_uuid(uuid, &mut tx).await?;
+
+        if !ans.is_valid() {
+            let _ = tx.rollback().await;
+            warn!("Attempted to use stale session {} last used {}", uuid, ans.last_used);
+            return Err(FError::new(FErrorInner::StaleSession(uuid)))
+        }
+
+        ans.last_used = Utc::now();
+        FullSession::refresh_internal(ans.uuid, ans.last_used, &mut tx).await?;
+        tx.commit().await?;
+        Ok(ans)
+    }
+
     #[allow(unused)]
-    pub async fn load_by_uuid(
+    pub async fn unsafe_load_by_uuid(
         uuid: Uuid,
-        refresh: bool,
         tx: &mut Transaction<'_>,
     ) -> FResult<FullSession> {
         trace!("Loading session {:?}", uuid);
@@ -142,18 +166,12 @@ impl FullSession {
         .fetch_one(&mut *tx)
         .await?;
 
-        let mut last_used = row.last_used;
-        if refresh {
-            last_used = Utc::now();
-            FullSession::refresh_internal(row.uuid, last_used, tx).await?;
-        }
-
         Ok(FullSession {
             uuid: row.uuid,
             user: MinUser::new(row.user_uuid, &row.user_display_name),
             real_user: MinUser::new(row.real_user_uuid, &row.real_user_display_name),
             login_time: row.login_time,
-            last_used: last_used,
+            last_used: row.last_used,
             remember_me: row.remember_me,
             ip_addr_real: row.ip_addr_real,
             ip_addr_peer: row.ip_addr_peer,
@@ -193,5 +211,19 @@ impl FullSession {
             real_user: self.real_user.clone(),
             auth_time: self.login_time.timestamp(),
         }
+    }
+}
+
+impl FromRequest for FullSession {
+    type Error = AWError;
+    type Future = Ready<Result<Self, Self::Error>>;
+    type Config = ();
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        use futures_util::future::{ok, err};
+        if let Some(session) = req.head().extensions().get::<FullSession>() {
+            println!("Got: {:?}", session);
+            return ok(session.clone());
+        }
+        err(actix_web::error::ErrorUnauthorized(""))
     }
 }
