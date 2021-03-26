@@ -22,11 +22,11 @@ pub async fn validate_endpoint(
 }
 
 #[derive(Debug)]
-pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, Arc<String>);
+pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, &'static str);
 
 impl SessionAuth {
-    pub fn new(cookie_name: &str, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> Self {
-        SessionAuth(db_pool, Arc::new(cookie_name.to_string()))
+    pub fn new(cookie_name: &'static str, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> Self {
+        SessionAuth(db_pool, cookie_name)
     }
 }
 
@@ -57,7 +57,7 @@ where
 #[derive(Debug)]
 pub struct SessionAuthMiddleware<S> {
     service: Rc<RefCell<S>>,
-    cookie_name: Arc<String>,
+    cookie_name: &'static str,
     db_pool: Arc<sqlx::Pool<sqlx::MySql>>,
 }
 
@@ -90,7 +90,7 @@ impl<S> SessionAuthMiddleware<S> {
                     continue;
                 }
             };
-            if cookie.name() == self.cookie_name.as_ref() {
+            if cookie.name() == self.cookie_name {
                 use std::str::FromStr;
 
                 let val = cookie.value();
@@ -135,7 +135,7 @@ impl<S> SessionAuthMiddleware<S> {
             Some(v) => v.clone(),
             None => return,
         };
-        let cookie = Cookie::build(self.cookie_name.as_ref(), session.get_uuid().to_string())
+        let cookie = Cookie::build(self.cookie_name, session.get_uuid().to_string())
             .secure(true)
             .http_only(true)
             .finish();
