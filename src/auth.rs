@@ -1,40 +1,32 @@
+use actix_web::http::{HeaderMap, HeaderValue};
 use std::cell::RefCell;
 use std::rc::Rc;
-use actix_web::http::{HeaderMap, HeaderName, HeaderValue};
 
-
-
-use std::sync::Arc;
 use crate::prelude::*;
-use std::task::{Context, Poll};
-use futures_util::future::Future;
-use std::pin::Pin;
 use futures_util::future::ok;
+use futures_util::future::Future;
 use futures_util::future::Ready;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::Error as AWError;
 
-// #[post("/keys")]
-// async fn keys_endpoint(data: web::Data<AppState<'_>>, _req: HttpRequest) -> FResult<String> {
-//     let ans = format!("[{}]", data.jwt.public_key_jwk());
-//     Ok(ans)
-// }
-
 #[get("/validate")]
-pub async fn validate_endpoint(_data: web::Data<AppState>, auth: Option<FullSession>) -> FResult<String> {
-    // TODO: transform this into a service and auto refresh token
-    // let token = decode_and_refresh_session(&data, &auth).await?;
-    // Ok(format!("OK!\n{:?}", token))
+pub async fn validate_endpoint(
+    _data: web::Data<AppState>,
+    auth: Option<FullSession>,
+) -> FResult<String> {
     Ok(format!("{:?}", auth))
 }
 
 #[derive(Debug)]
-pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, String);
+pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, Arc<String>);
 
 impl SessionAuth {
     pub fn new(cookie_name: &str, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> Self {
-        SessionAuth(db_pool, cookie_name.to_string())
+        SessionAuth(db_pool, Arc::new(cookie_name.to_string()))
     }
 }
 
@@ -54,14 +46,18 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         let db_pool = self.0.clone();
         let cookie_name = self.1.clone();
-        ok(SessionAuthMiddleware { service: Rc::new(RefCell::new(service)), db_pool, cookie_name })
+        ok(SessionAuthMiddleware {
+            service: Rc::new(RefCell::new(service)),
+            db_pool,
+            cookie_name,
+        })
     }
 }
 
 #[derive(Debug)]
 pub struct SessionAuthMiddleware<S> {
     service: Rc<RefCell<S>>,
-    cookie_name: String,
+    cookie_name: Arc<String>,
     db_pool: Arc<sqlx::Pool<sqlx::MySql>>,
 }
 
@@ -74,6 +70,7 @@ impl<S> SessionAuthMiddleware<S> {
         }
     }
 
+    /// Looks at all cookies, finds the one with the desired name and return its value as an UUID
     fn get_session_uuid(&self, headers: &HeaderMap) -> Option<Uuid> {
         use actix_web::http::header::COOKIE;
         use cookie::Cookie;
@@ -93,7 +90,7 @@ impl<S> SessionAuthMiddleware<S> {
                     continue;
                 }
             };
-            if cookie.name() == self.cookie_name {
+            if cookie.name() == self.cookie_name.as_ref() {
                 use std::str::FromStr;
 
                 let val = cookie.value();
@@ -110,29 +107,46 @@ impl<S> SessionAuthMiddleware<S> {
         None
     }
 
+    /// Tries to load the session from the database and the session UUID from the cookies
     async fn before_request(&mut self, req: &mut ServiceRequest) {
         let session_uuid = match self.get_session_uuid(req.head().headers()) {
             Some(v) => v,
-            None => return
+            None => return,
         };
-        println!("{:?}", session_uuid);
-        let session = match FullSession::safe_load_by_uuid(session_uuid, self.db_pool.clone()).await {
+        let session = match FullSession::safe_load_by_uuid(session_uuid, self.db_pool.clone()).await
+        {
             Ok(v) => v,
             Err(err) => {
                 if !err.is_not_found() {
                     warn!("Failed to get session {}: {:?}", session_uuid, err);
                 }
-                return
+                return;
             }
         };
         req.head().extensions_mut().insert(session);
     }
 
+    /// sends the session id cookie to the browser
     fn after_response<B>(&self, res: &mut ServiceResponse<B>) {
-        if let Some(session) = res.request().head().extensions().get::<FullSession>() {
-            println!("Got: {:?}", session);
-            // set cookie
-        }
+        use actix_web::http::header::SET_COOKIE;
+        use cookie::Cookie;
+
+        let session = match res.request().head().extensions().get::<FullSession>() {
+            Some(v) => v.clone(),
+            None => return,
+        };
+        let cookie = Cookie::build(self.cookie_name.as_ref(), session.get_uuid().to_string())
+            .secure(true)
+            .http_only(true)
+            .finish();
+        let cookie_str = match HeaderValue::from_str(&cookie.to_string()) {
+            Ok(v) => v,
+            Err(err) => {
+                error!("Failed to set cookie: {:?}", err);
+                return;
+            }
+        };
+        res.headers_mut().append(SET_COOKIE, cookie_str);
     }
 }
 

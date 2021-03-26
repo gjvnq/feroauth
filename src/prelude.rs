@@ -1,3 +1,4 @@
+use crate::Arc;
 pub use crate::model::prelude::*;
 
 pub use actix_web::dev::Body as ActixWebBody;
@@ -13,8 +14,7 @@ pub use crate::model::{Password, User};
 pub use jsonwebtoken::Algorithm as JwtAlgorithm;
 
 pub struct AppState {
-    pub db: sqlx::Pool<sqlx::MySql>,
-    pub jwt: crate::jwt_lib::JwKeyStore,
+    pub db: Arc<sqlx::Pool<sqlx::MySql>>
 }
 
 pub fn get_ip(req: &HttpRequest) -> (String, String) {

@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use futures_util::future::Ready;
-use actix_web::Error as AWError;
-use actix_web::FromRequest;
-use actix_web::dev::Payload;
 use crate::model::prelude::*;
 use crate::model::user::{MinUser, User};
+use actix_web::dev::Payload;
+use actix_web::Error as AWError;
+use actix_web::FromRequest;
 use chrono::Duration;
+use futures_util::future::Ready;
 use sqlx::{MySql, Pool};
+use std::sync::Arc;
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
 const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
@@ -93,7 +93,7 @@ impl FullSession {
 
     pub fn is_valid(&self) -> bool {
         let now = Utc::now();
-        now <= self.valid_until() 
+        now <= self.valid_until()
     }
 
     #[allow(unused)]
@@ -136,14 +136,20 @@ impl FullSession {
         Ok(())
     }
 
-    pub async fn safe_load_by_uuid(uuid: Uuid, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> FResult<FullSession> {
+    pub async fn safe_load_by_uuid(
+        uuid: Uuid,
+        db_pool: Arc<sqlx::Pool<sqlx::MySql>>,
+    ) -> FResult<FullSession> {
         let mut tx = db_pool.begin().await?;
         let mut ans = FullSession::unsafe_load_by_uuid(uuid, &mut tx).await?;
 
         if !ans.is_valid() {
             let _ = tx.rollback().await;
-            warn!("Attempted to use stale session {} last used {}", uuid, ans.last_used);
-            return Err(FError::new(FErrorInner::StaleSession(uuid)))
+            warn!(
+                "Attempted to use stale session {} last used {}",
+                uuid, ans.last_used
+            );
+            return Err(FError::new(FErrorInner::StaleSession(uuid)));
         }
 
         ans.last_used = Utc::now();
@@ -153,10 +159,7 @@ impl FullSession {
     }
 
     #[allow(unused)]
-    pub async fn unsafe_load_by_uuid(
-        uuid: Uuid,
-        tx: &mut Transaction<'_>,
-    ) -> FResult<FullSession> {
+    pub async fn unsafe_load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<FullSession> {
         trace!("Loading session {:?}", uuid);
         let row = sqlx::query_as_unchecked!(
             FullSessionRaw,
@@ -212,6 +215,11 @@ impl FullSession {
             auth_time: self.login_time.timestamp(),
         }
     }
+
+    /// Save the session to the request so that it can be automagically converted to a cookie
+    pub fn to_request(self, req: &mut HttpRequest) {
+        req.head().extensions_mut().insert(self);
+    }
 }
 
 impl FromRequest for FullSession {
@@ -219,9 +227,8 @@ impl FromRequest for FullSession {
     type Future = Ready<Result<Self, Self::Error>>;
     type Config = ();
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        use futures_util::future::{ok, err};
+        use futures_util::future::{err, ok};
         if let Some(session) = req.head().extensions().get::<FullSession>() {
-            println!("Got: {:?}", session);
             return ok(session.clone());
         }
         err(actix_web::error::ErrorUnauthorized(""))

@@ -83,7 +83,9 @@ impl JwWrapedKey {
 
 impl JwKeyStore {
     pub fn new() -> Self {
-        JwKeyStore{..Default::default()}
+        JwKeyStore {
+            ..Default::default()
+        }
     }
 
     #[allow(unused)]
@@ -309,7 +311,14 @@ impl JwKeyStore {
             }
         };
 
-        self.actual_make_token(key.kid_or_thumbprint(), now, JwtTime::Fixed(now), JwtTime::Ignore, aud, claims)
+        self.actual_make_token(
+            key.kid_or_thumbprint(),
+            now,
+            JwtTime::Fixed(now),
+            JwtTime::Ignore,
+            aud,
+            claims,
+        )
     }
 
     /// The same as [`JwKeyStore::make_token`] but will auto generate a new key if needed.

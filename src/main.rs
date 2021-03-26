@@ -10,9 +10,8 @@ extern crate actix_web;
 extern crate log;
 extern crate serde_json;
 
-use std::sync::Arc;
 use crate::prelude::*;
-use hex::FromHex;
+use std::sync::Arc;
 
 use actix_web::{App, HttpServer};
 use dotenv::dotenv;
@@ -46,33 +45,19 @@ async fn main() -> FResult<()> {
         model::db::DB_POOL = Some(db_pool.clone());
     }
 
-    // let jwt_key_pem = env::var("JWY_KEY_PEM").expect("JWY_KEY_PEM is not set in .env file");
-    let mut key_store = jwt_lib::JwKeyStore::new();
-    let key = jwt_lib::JwKey::generate(jwt_lib::JwtAlgorithm::ES256, true)?;
-    println!("JWT KEY: {}", key.private_key_jwk().unwrap().to_json()?);
-    key_store.add_key(key, None, None, None, None)?;
-
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
                 db: db_pool.clone(),
-                jwt: key_store.clone(),
             })
-            // add cookies
-            // .wrap(
-            //     CookieSession::signed(&cookie_key)
-            //         .name("feroauth")
-            //         .http_only(true)
-            //         .secure(false),
-            // )
-            .wrap(
-                crate::auth::SessionAuth::new("feroauth", Arc::new(db_pool.clone()))
-            )
+            .wrap(crate::auth::SessionAuth::new(
+                "feroauth",
+                db_pool.clone(),
+            ))
             .service(index)
-            // .service(jwt::keys_endpoint)
             .service(auth::validate_endpoint)
             .service(users::login_endpoint)
-            // .service(users::get_user_endpoint)
+        // .service(users::get_user_endpoint)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

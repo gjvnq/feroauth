@@ -136,7 +136,7 @@ impl FError {
     }
 
     pub fn is_unauthorized(&self) -> bool {
-        return false
+        return false;
         // use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
         // match &self.inner {
         //     JwtError(err) => match err.kind() {

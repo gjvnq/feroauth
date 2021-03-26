@@ -26,7 +26,6 @@ enum LoginResponseStatus {
 struct LoginResponse {
     status: LoginResponseStatus,
     user: Option<MinUser>,
-    jwt: Option<String>,
 }
 
 impl LoginResponse {
@@ -34,7 +33,6 @@ impl LoginResponse {
         LoginResponse {
             status: status,
             user: None,
-            jwt: None,
         }
     }
 }
@@ -43,7 +41,7 @@ impl LoginResponse {
 async fn login_endpoint(
     data: web::Data<AppState>,
     info: web::Json<LoginRequest>,
-    req: HttpRequest,
+    mut req: HttpRequest,
 ) -> FResult<HttpResponse> {
     // Safety: no sane client would fail to send the user-agent.
     let user_agent = req.headers().get("user-agent").unwrap().to_str().unwrap();
@@ -85,7 +83,6 @@ async fn login_endpoint(
     let mut ans = LoginResponse {
         status: LoginResponseStatus::MissingPassword,
         user: Some(user.clone()),
-        jwt: None,
     };
     let password = match &info.password {
         Some(v) => v,
@@ -134,7 +131,7 @@ async fn login_endpoint(
         session.save(&mut tx).await?;
         tx.commit().await?;
 
-        // ans.jwt = Some(data.jwt.encode(session.to_claims())?);
+        session.to_request(&mut req);
 
         debug!(
             "{} - Finished login for {:?}",
