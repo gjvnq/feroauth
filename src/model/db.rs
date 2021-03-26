@@ -1,17 +1,20 @@
-use std::sync::Arc;
 use crate::model::prelude::*;
 use sqlx::mysql::MySqlConnectOptions;
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::ConnectOptions;
-
-pub static mut DB_POOL: Option<Arc<sqlx::Pool<sqlx::MySql>>> = None;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct DbConn {
     pool: MySqlPool,
 }
 
-pub async fn get_pool(db_host: &str, db_user: &str, db_pass: &str, db_name: &str) -> Arc<MySqlPool> {
+pub async fn get_pool(
+    db_host: &str,
+    db_user: &str,
+    db_pass: &str,
+    db_name: &str,
+) -> Arc<MySqlPool> {
     let mut conn_opts = MySqlConnectOptions::new()
         .host(&db_host)
         .username(&db_user)
@@ -47,19 +50,4 @@ pub async fn get_pool(db_host: &str, db_user: &str, db_pass: &str, db_name: &str
     };
 
     Arc::new(pool)
-}
-
-pub fn get_db_pool() -> &'static sqlx::Pool<sqlx::MySql> {
-    unsafe { DB_POOL.as_ref().unwrap() }
-}
-
-pub async fn get_tx() -> Transaction<'static> {
-    let tx = get_db_pool().begin().await;
-    match tx {
-        Ok(tx) => tx,
-        Err(err) => {
-            error!("Failed to get DB transaction: {:?}", err);
-            panic!("Failed to get DB transaction: {:?}", err);
-        }
-    }
 }

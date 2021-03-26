@@ -1,20 +1,14 @@
-use crate::Arc;
+pub use std::sync::Arc;
 pub use crate::model::prelude::*;
 
 pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;
 pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
-pub use actix_session::CookieSession;
-pub use actix_session::Session as SSession;
-pub use actix_web_httpauth::extractors::bearer::BearerAuth;
-
 pub use crate::model::{Password, User};
 
-pub use jsonwebtoken::Algorithm as JwtAlgorithm;
-
 pub struct AppState {
-    pub db: Arc<sqlx::Pool<sqlx::MySql>>
+    pub db: Arc<sqlx::Pool<sqlx::MySql>>,
 }
 
 pub fn get_ip(req: &HttpRequest) -> (String, String) {

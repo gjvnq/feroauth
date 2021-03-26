@@ -5,5 +5,5 @@ pub mod session;
 pub mod user;
 
 pub use password::Password;
-pub use session::{FullSession, MinSession};
+pub use session::FullSession;
 pub use user::{MinUser, User};

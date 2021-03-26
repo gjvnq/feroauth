@@ -1,16 +1,14 @@
 use crate::model::prelude::*;
+use std::sync::Arc;
 use crate::model::user::{MinUser, User};
 use actix_web::dev::Payload;
 use actix_web::Error as AWError;
 use actix_web::FromRequest;
 use chrono::Duration;
 use futures_util::future::Ready;
-use sqlx::{MySql, Pool};
-use std::sync::Arc;
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
 const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
-const REFRESH_INTERVAL: i64 = 15; // 15 s
 
 #[derive(Debug, sqlx::FromRow)]
 struct FullSessionRaw {
@@ -39,31 +37,6 @@ pub struct FullSession {
     ip_addr_real: String,
     ip_addr_peer: String,
     user_agent: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinSession {
-    /// Session UUID
-    pub sid: Uuid,
-    pub iat: i64,
-    pub exp: i64,
-    pub user: MinUser,
-    pub real_user: MinUser,
-    pub auth_time: i64,
-}
-
-impl MinSession {
-    pub async fn refresh(&self, db: &Pool<MySql>) -> FResult<()> {
-        let now = Utc::now();
-        let delta = now.timestamp() - self.iat;
-        debug!("Delta: {:?}", delta);
-        if REFRESH_INTERVAL < delta {
-            let mut tx = db.begin().await?;
-            FullSession::refresh_internal(self.sid, now, &mut tx).await?;
-            tx.commit().await?;
-        }
-        Ok(())
-    }
 }
 
 impl FullSession {
@@ -201,19 +174,6 @@ impl FullSession {
         User::mark_last_login(self.user.get_uuid(), self.login_time, tx).await?;
 
         Ok(())
-    }
-
-    pub fn to_claims(&self) -> MinSession {
-        let now = Utc::now();
-        MinSession {
-            /// Session UUID
-            sid: self.uuid,
-            iat: now.timestamp(),
-            exp: self.valid_until().timestamp(),
-            user: self.user.clone(),
-            real_user: self.real_user.clone(),
-            auth_time: self.login_time.timestamp(),
-        }
     }
 
     /// Save the session to the request so that it can be automagically converted to a cookie

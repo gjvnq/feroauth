@@ -19,16 +19,8 @@ pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;
 pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
-pub use actix_session::{CookieSession, Session};
-
-use crate::jwt_lib::JwtError as JwtErrorReal;
-use openssl::error::ErrorStack as SslErrorStackReal;
-
-pub use qstring::QString;
-
 pub use argonautica::Error as ArgoErrorReal;
 
-pub use crate::model::db::get_tx;
 pub use crate::model::*;
 
 use std::panic::Location;
@@ -79,18 +71,15 @@ pub enum FErrorInner {
     NotImplemented,
     SQLError(SQLErrorReal),
     IOError(IOErrorReal),
-    // InvalidValue(InvalidValue),
     StaleSession(Uuid),
     UuidParseError(String),
     ArgoError(ArgoErrorReal),
-    SslErrorStack(SslErrorStackReal),
-    JwtError(JwtErrorReal),
+    #[allow(unused)]
     FauxPanic(&'static str, Option<String>),
 }
 
 pub use FErrorInner::{
-    ArgoError, FauxPanic, IOError, JwtError, NotImplemented, SQLError, SerializationError,
-    SslErrorStack, UuidParseError,
+    ArgoError, FauxPanic, IOError, NotImplemented, SQLError, SerializationError, UuidParseError,
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -109,16 +98,19 @@ impl FError {
     }
 
     #[track_caller]
+    #[allow(unused)]
     pub fn new_faux_panic_1(a: &'static str) -> Self {
         FError::new(FErrorInner::FauxPanic(a, None))
     }
 
     #[track_caller]
+    #[allow(unused)]
     pub fn new_faux_panic_2(a: &'static str, b: Option<String>) -> Self {
         FError::new(FErrorInner::FauxPanic(a, b))
     }
 
     #[track_caller]
+    #[allow(unused)]
     pub fn new_faux_panic_3<T: std::fmt::Debug>(a: &'static str, b: T) -> Self {
         let msg = format!("{:?}", b);
         FError::new_faux_panic_2(a, Some(msg))
@@ -137,21 +129,6 @@ impl FError {
 
     pub fn is_unauthorized(&self) -> bool {
         return false;
-        // use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
-        // match &self.inner {
-        //     JwtError(err) => match err.kind() {
-        //         JwtErrorKind::InvalidToken => true,
-        //         JwtErrorKind::InvalidSignature => true,
-        //         JwtErrorKind::ExpiredSignature => true,
-        //         JwtErrorKind::InvalidIssuer => true,
-        //         JwtErrorKind::InvalidAudience => true,
-        //         JwtErrorKind::InvalidSubject => true,
-        //         JwtErrorKind::ImmatureSignature => true,
-        //         JwtErrorKind::InvalidAlgorithm => true,
-        //         _ => false,
-        //     },
-        //     _ => false,
-        // }
     }
 }
 
@@ -209,41 +186,6 @@ impl std::convert::From<ArgoErrorReal> for FError {
             col: loc.column(),
             inner: ArgoError(err),
         }
-    }
-}
-
-impl std::convert::From<JwtErrorReal> for FError {
-    #[track_caller]
-    fn from(err: JwtErrorReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: JwtError(err),
-        }
-    }
-}
-
-impl std::convert::From<SslErrorStackReal> for FError {
-    #[track_caller]
-    fn from(err: SslErrorStackReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: SslErrorStack(err),
-        }
-    }
-}
-
-#[allow(unused)]
-#[track_caller]
-pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
-    match Uuid::parse_str(&val) {
-        Ok(v) => Ok(v),
-        Err(_) => Err(FError::new(UuidParseError(val.to_string()))),
     }
 }
 

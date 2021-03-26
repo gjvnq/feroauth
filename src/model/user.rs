@@ -122,6 +122,7 @@ impl User {
         ans
     }
 
+    #[allow(unused)]
     pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {
         trace!("Loading user {:?}", uuid);
         let base_row = sqlx::query!(

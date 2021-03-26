@@ -1,5 +1,4 @@
 mod auth;
-mod jwt_lib;
 mod misc;
 mod model;
 mod prelude;
@@ -11,24 +10,10 @@ extern crate log;
 extern crate serde_json;
 
 use crate::prelude::*;
-use std::sync::Arc;
 
 use actix_web::{App, HttpServer};
 use dotenv::dotenv;
 use std::env;
-
-#[get("/")]
-async fn index(session: Session) -> Result<String, actix_web::Error> {
-    // access session data
-    if let Some(count) = session.get::<i32>("counter")? {
-        println!("SESSION value: {}", count);
-        session.set("counter", count + 1)?;
-        Ok(format!("Welcome! {:?}", count))
-    } else {
-        session.set("counter", 1)?;
-        Ok("Welcome!".to_string())
-    }
-}
 
 #[actix_web::main]
 async fn main() -> FResult<()> {
@@ -41,20 +26,12 @@ async fn main() -> FResult<()> {
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
 
-    unsafe {
-        model::db::DB_POOL = Some(db_pool.clone());
-    }
-
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
                 db: db_pool.clone(),
             })
-            .wrap(crate::auth::SessionAuth::new(
-                "feroauth",
-                db_pool.clone(),
-            ))
-            .service(index)
+            .wrap(crate::auth::SessionAuth::new("feroauth", db_pool.clone()))
             .service(auth::validate_endpoint)
             .service(users::login_endpoint)
         // .service(users::get_user_endpoint)
