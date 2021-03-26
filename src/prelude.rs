@@ -1,5 +1,5 @@
-pub use std::sync::Arc;
 pub use crate::model::prelude::*;
+pub use std::sync::Arc;
 
 pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;

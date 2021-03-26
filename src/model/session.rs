@@ -1,11 +1,11 @@
 use crate::model::prelude::*;
-use std::sync::Arc;
 use crate::model::user::{MinUser, User};
 use actix_web::dev::Payload;
 use actix_web::Error as AWError;
 use actix_web::FromRequest;
 use chrono::Duration;
 use futures_util::future::Ready;
+use std::sync::Arc;
 
 const SESSION_LIFE_SHORT: i64 = 15 * 60; // 15 min
 const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
