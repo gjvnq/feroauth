@@ -79,7 +79,8 @@ pub enum FErrorInner {
 }
 
 pub use FErrorInner::{
-    ArgoError, FauxPanic, IOError, NotImplemented, SQLError, SerializationError, UuidParseError,
+    ArgoError, FauxPanic, IOError, NotImplemented, SQLError, SerializationError, StaleSession,
+    UuidParseError,
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -132,9 +133,32 @@ impl FError {
     }
 }
 
+impl std::fmt::Display for FErrorInner {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let kind = match self {
+            SerializationError(_) => "serialization error",
+            NotImplemented => "not implemented error",
+            SQLError(_) => "SQL error",
+            IOError(_) => "IO error",
+            StaleSession(_) => "stale session error",
+            UuidParseError(_) => "uuid parse error",
+            ArgoError(_) => "argonautica error",
+            FauxPanic(_, _) => "faux panic error",
+        };
+        fmt.write_str(kind)
+    }
+}
+
 impl std::fmt::Display for FError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        fmt.write_fmt(format_args!("{}:{}:{}", self.file, self.line, self.col))
+        if self.is_not_found() {
+            fmt.write_str("not found")
+        } else {
+            fmt.write_fmt(format_args!(
+                "{} at {}:{}:{}",
+                self.inner, self.file, self.line, self.col
+            ))
+        }
     }
 }
 
@@ -194,5 +218,14 @@ pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
     match Uuid::from_slice(&val) {
         Ok(v) => Ok(v),
         Err(_) => Err(FError::new(UuidParseError(format!("{:?}", val)))),
+    }
+}
+
+#[allow(unused)]
+#[track_caller]
+pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
+    match Uuid::parse_str(&val) {
+        Ok(v) => Ok(v),
+        Err(_) => Err(FError::new(UuidParseError(val.to_string()))),
     }
 }

@@ -144,20 +144,39 @@ async fn login_endpoint(
     }
 }
 
-// #[get("/users/{uuid}")]
-// async fn get_user_endpoint(
-//     data: web::Data<AppState>,
-//     auth: BearerAuth,
-//     path: web::Path<String>,
-// ) -> FResult<HttpResponse> {
-//     let token = decode_and_refresh_session(&data, &auth).await?;
-//     debug!("{:?}", token);
+#[get("/users/{handle}")]
+async fn get_user_endpoint(
+    data: web::Data<AppState>,
+    _auth: FullSession,
+    path: web::Path<String>,
+) -> FResult<HttpResponse> {
+    // TODO: check permission
 
-//     // TODO: check permission
-//     debug!("{:?}", path);
-//     let uuid = parse_uuid_str(&path)?;
-//     let mut tx = data.db.begin().await.unwrap();
-//     let user = User::load_by_uuid(uuid, &mut tx).await?;
+    let mut tx = data.db.begin().await.unwrap();
+    let user = User::load_by_login_handle(&path, &mut tx).await?;
 
-//     return Ok(HttpResponse::Ok().json(user));
-// }
+    return Ok(HttpResponse::Ok().json(user));
+}
+
+#[put("/users/{handle}")]
+async fn put_user_endpoint(
+    data: web::Data<AppState>,
+    _auth: FullSession,
+    info: web::Json<UserChange>,
+    path: web::Path<String>,
+) -> FResult<HttpResponse> {
+    // TODO: check permission
+
+    let mut tx = data.db.begin().await.unwrap();
+    let handle = path.as_str();
+    let mut user = match handle {
+        "new" => User::new(),
+        _ => User::load_by_login_handle(handle, &mut tx).await?,
+    };
+    user.apply_changes(&info);
+    debug!("{:?}", user);
+    user.save(&mut tx).await?;
+    tx.commit().await?;
+
+    return Ok(HttpResponse::Ok().json(user));
+}

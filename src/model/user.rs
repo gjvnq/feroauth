@@ -6,7 +6,7 @@ pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 pub struct User {
     uuid: Uuid,
     pub display_name: String,
-    added: DateTime<Utc>,
+    added: Option<DateTime<Utc>>,
     last_login: Option<DateTime<Utc>>,
     pub login_handles: Vec<LoginHandle>,
 }
@@ -97,12 +97,11 @@ impl User {
         self.uuid
     }
 
-    #[allow(unused)]
-    pub fn new(name: String) -> User {
+    pub fn new() -> User {
         User {
             uuid: Uuid::new_v4(),
-            display_name: name,
-            added: Utc::now(),
+            display_name: "".to_string(),
+            added: None,
             last_login: None,
             login_handles: vec![],
         }
@@ -152,7 +151,7 @@ impl User {
         Ok(User {
             uuid: parse_uuid_vec(base_row.uuid)?,
             display_name: base_row.display_name,
-            added: Utc.from_utc_datetime(&base_row.added),
+            added: Some(Utc.from_utc_datetime(&base_row.added)),
             last_login: base_row
                 .last_login
                 .as_ref()
@@ -161,7 +160,6 @@ impl User {
         })
     }
 
-    #[allow(unused)]
     pub async fn load_by_login_handle(
         login_handle: &str,
         tx: &mut Transaction<'_>,
@@ -169,6 +167,10 @@ impl User {
         // Remove trouble making whitespace
         let login_handle = login_handle.trim();
         trace!("Loading user {:?}", login_handle);
+
+        if let Ok(uuid) = parse_uuid_str(login_handle) {
+            return User::load_by_uuid(uuid, tx).await;
+        }
 
         let base_row = sqlx::query!(
             "SELECT `user`.`uuid`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
@@ -198,7 +200,7 @@ impl User {
         Ok(User {
             uuid: uuid,
             display_name: base_row.display_name,
-            added: Utc.from_utc_datetime(&base_row.added),
+            added: Some(Utc.from_utc_datetime(&base_row.added)),
             last_login: base_row
                 .last_login
                 .as_ref()
@@ -206,4 +208,77 @@ impl User {
             login_handles: handles,
         })
     }
+
+    pub async fn save(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        trace!("Saving user {:?}", self.uuid);
+        match self.added {
+            Some(_) => self.db_update(tx).await,
+            None => self.db_insert(tx).await,
+        }
+    }
+
+    async fn db_insert(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        self.last_login = None;
+        self.added = Some(Utc::now());
+        sqlx::query!(
+            "INSERT INTO `user` (`uuid`, `display_name`, `added`, `last_login`) VALUES (?, ?, ?, ?)",
+            self.uuid,
+            self.display_name,
+            self.added,
+            self.last_login
+        )
+        .execute(&mut *tx)
+        .await?;
+        self.db_save_login_handles(tx).await
+    }
+
+    async fn db_update(&self, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!(
+            "UPDATE `user` SET `display_name` = ? WHERE `uuid` = ?",
+            self.display_name,
+            self.uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+        self.db_save_login_handles(tx).await
+    }
+
+    async fn db_save_login_handles(&self, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!(
+            "DELETE FROM `login_handle` WHERE `user_uuid` = ?",
+            self.uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        for handle in &self.login_handles {
+            sqlx::query!(
+                "INSERT INTO `login_handle` (`login_handle`, `kind`, `user_uuid`) VALUES (?, ?, ?)",
+                handle.handle,
+                handle.kind,
+                self.uuid
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_changes(&mut self, changes: &UserChange) {
+        if let Some(display_name) = &changes.display_name {
+            self.display_name = display_name.to_string()
+        }
+        if let Some(login_handles) = &changes.login_handles {
+            self.login_handles = login_handles.to_vec()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserChange {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_handles: Option<Vec<LoginHandle>>,
 }

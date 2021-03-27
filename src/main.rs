@@ -34,7 +34,8 @@ async fn main() -> FResult<()> {
             .wrap(crate::auth::SessionAuth::new("feroauth", db_pool.clone()))
             .service(auth::validate_endpoint)
             .service(users::login_endpoint)
-        // .service(users::get_user_endpoint)
+            .service(users::get_user_endpoint)
+            .service(users::put_user_endpoint)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");

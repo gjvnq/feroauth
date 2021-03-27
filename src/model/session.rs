@@ -1,5 +1,5 @@
 use crate::model::prelude::*;
-use crate::model::user::{MinUser, User};
+use crate::model::user::{MinUser, User, UserChange};
 use actix_web::dev::Payload;
 use actix_web::Error as AWError;
 use actix_web::FromRequest;
