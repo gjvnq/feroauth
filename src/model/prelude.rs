@@ -52,7 +52,7 @@ pub fn unwrap_or_log<T, E: std::fmt::Debug>(input: Result<T, E>, msg: &str) -> T
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Serialize)]
 pub enum InvalidValue {
     OutOfRange(&'static str, usize, usize), // field name, min, max
 }
@@ -131,6 +131,13 @@ impl FError {
         }
     }
 
+    pub fn is_validation(&self) -> bool {
+        match &self.inner {
+            ValidationError(_) => true,
+            _ => false
+        }
+    }
+
     pub fn is_unauthorized(&self) -> bool {
         return false;
     }
@@ -157,6 +164,9 @@ impl std::fmt::Display for FError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         if self.is_not_found() {
             fmt.write_str("not found")
+        } else if let ValidationError(errs) = &self.inner {
+            let json = serde_json::to_string(&errs).unwrap_or("validation error".to_string());
+            fmt.write_str(&json)
         } else {
             fmt.write_fmt(format_args!(
                 "{} at {}:{}:{}",
@@ -172,6 +182,8 @@ impl actix_web::error::ResponseError for FError {
             actix_web::http::StatusCode::NOT_FOUND
         } else if self.is_unauthorized() {
             actix_web::http::StatusCode::UNAUTHORIZED
+        } else if self.is_validation() {
+            actix_web::http::StatusCode::BAD_REQUEST
         } else {
             actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
         }
