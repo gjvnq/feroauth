@@ -6,6 +6,8 @@ pub use std::io::Result as IOResult;
 
 pub use std::net::IpAddr;
 
+pub use std::hash::Hash as HashTrait;
+
 pub use serde::{Deserialize, Serialize};
 
 pub use sqlx::mysql::MySqlPool;
@@ -52,7 +54,7 @@ pub fn unwrap_or_log<T, E: std::fmt::Debug>(input: Result<T, E>, msg: &str) -> T
 
 #[derive(Debug)]
 pub enum InvalidValue {
-    OutOfRange(String, usize, usize), // field name, min, max
+    OutOfRange(&'static str, usize, usize), // field name, min, max
 }
 
 #[derive(Debug)]
@@ -69,6 +71,7 @@ pub enum FErrorInner {
     SerializationError(String),
     #[allow(unused)]
     NotImplemented,
+    ValidationError(Vec<InvalidValue>),
     SQLError(SQLErrorReal),
     IOError(IOErrorReal),
     StaleSession(Uuid),
@@ -80,7 +83,7 @@ pub enum FErrorInner {
 
 pub use FErrorInner::{
     ArgoError, FauxPanic, IOError, NotImplemented, SQLError, SerializationError, StaleSession,
-    UuidParseError,
+    UuidParseError, ValidationError,
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -138,6 +141,7 @@ impl std::fmt::Display for FErrorInner {
         let kind = match self {
             SerializationError(_) => "serialization error",
             NotImplemented => "not implemented error",
+            ValidationError(_) => "validation error",
             SQLError(_) => "SQL error",
             IOError(_) => "IO error",
             StaleSession(_) => "stale session error",

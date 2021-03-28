@@ -1,4 +1,5 @@
 use crate::model::prelude::*;
+use std::collections::HashSet;
 
 pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 
@@ -9,6 +10,8 @@ pub struct User {
     added: Option<DateTime<Utc>>,
     last_login: Option<DateTime<Utc>>,
     pub login_handles: Vec<LoginHandle>,
+    pub direct_groups: HashSet<MinGroup>,
+    pub all_groups: HashSet<MinGroup>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +20,17 @@ pub struct LoginHandle {
     kind: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserChange {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_handles: Option<Vec<LoginHandle>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direct_groups: Option<HashSet<MinGroup>>,
+}
+
+// This is used when we need just a vague idea of the user (e.g. when storing sessions via [`FullSession`])
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinUser {
     uuid: Uuid,
@@ -104,21 +118,56 @@ impl User {
             added: None,
             last_login: None,
             login_handles: vec![],
+            direct_groups: HashSet::new(),
+            all_groups: HashSet::new(),
         }
     }
 
-    #[allow(unused)]
-    pub fn is_valid(&self) -> Vec<InvalidValue> {
+    pub fn validate(&self) -> Vec<InvalidValue> {
         let len = self.display_name.chars().count();
         let mut ans = vec![];
         if !(MIN_NON_EMPTY_STR < len && len <= MAX_DISPLAY_NAME_LEN) {
             ans.push(InvalidValue::OutOfRange(
-                "user.display_name".to_string(),
+                "user.display_name",
                 MIN_NON_EMPTY_STR,
                 MAX_DISPLAY_NAME_LEN,
             ))
         }
         ans
+    }
+
+    pub fn validate_as_err(&self) -> FResult<()> {
+        let errs = self.validate();
+        if errs.len() != 0 {
+            return Err(FError::new(ValidationError(errs)));
+        }
+        Ok(())
+    }
+
+    async fn load_login_handles(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<Vec<LoginHandle>> {
+        let handle_row = sqlx::query!(
+            "SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?",
+            uuid
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+
+        let mut handles = vec![];
+        for handle in handle_row {
+            handles.push(LoginHandle {
+                handle: handle.login_handle,
+                kind: handle.kind,
+            })
+        }
+
+        Ok(handles)
+    }
+
+    async fn load_groups(
+        uuid: Uuid,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<(HashSet<MinGroup>, HashSet<MinGroup>)> {
+        MinGroup::load_for(uuid, tx).await
     }
 
     #[allow(unused)]
@@ -138,25 +187,22 @@ impl User {
         )
         .fetch_all(&mut *tx)
         .await?;
-        println!("{:?}", handle_row);
+        let uuid = parse_uuid_vec(base_row.uuid)?;
 
-        let mut handles = vec![];
-        for handle in handle_row {
-            handles.push(LoginHandle {
-                handle: handle.login_handle,
-                kind: handle.kind,
-            })
-        }
+        let (direct_groups, all_groups) = User::load_groups(uuid, tx).await?;
+        let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
-            uuid: parse_uuid_vec(base_row.uuid)?,
+            uuid: uuid,
             display_name: base_row.display_name,
             added: Some(Utc.from_utc_datetime(&base_row.added)),
             last_login: base_row
                 .last_login
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
-            login_handles: handles,
+            login_handles: login_handles,
+            direct_groups: direct_groups,
+            all_groups: all_groups,
         })
     }
 
@@ -178,24 +224,10 @@ impl User {
         )
         .fetch_one(&mut *tx)
         .await?;
-        println!("{:?}", base_row);
-
         let uuid = parse_uuid_vec(base_row.uuid)?;
-        let handle_row = sqlx::query!(
-            "SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?",
-            uuid
-        )
-        .fetch_all(&mut *tx)
-        .await?;
-        println!("{:?}", handle_row);
 
-        let mut handles = vec![];
-        for handle in handle_row {
-            handles.push(LoginHandle {
-                handle: handle.login_handle,
-                kind: handle.kind,
-            })
-        }
+        let (direct_groups, all_groups) = User::load_groups(uuid, tx).await?;
+        let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
             uuid: uuid,
@@ -205,12 +237,17 @@ impl User {
                 .last_login
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
-            login_handles: handles,
+            login_handles: login_handles,
+            direct_groups: direct_groups,
+            all_groups: all_groups,
         })
     }
 
     pub async fn save(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
         trace!("Saving user {:?}", self.uuid);
+
+        self.validate_as_err()?;
+
         match self.added {
             Some(_) => self.db_update(tx).await,
             None => self.db_insert(tx).await,
@@ -229,7 +266,9 @@ impl User {
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_login_handles(tx).await
+        self.db_save_login_handles(tx).await?;
+        self.db_save_groups(tx).await?;
+        Ok(())
     }
 
     async fn db_update(&self, tx: &mut Transaction<'_>) -> FResult<()> {
@@ -240,7 +279,9 @@ impl User {
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_login_handles(tx).await
+        self.db_save_login_handles(tx).await?;
+        self.db_save_groups(tx).await?;
+        Ok(())
     }
 
     async fn db_save_login_handles(&self, tx: &mut Transaction<'_>) -> FResult<()> {
@@ -265,20 +306,36 @@ impl User {
         Ok(())
     }
 
-    pub fn apply_changes(&mut self, changes: &UserChange) {
-        if let Some(display_name) = &changes.display_name {
-            self.display_name = display_name.to_string()
+    async fn db_save_groups(&self, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!(
+            "DELETE FROM `group_members` WHERE `member_uuid` = ?",
+            self.uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        for group in &self.direct_groups {
+            sqlx::query!(
+                "INSERT INTO `group_members` (`group_uuid`, `member_uuid`) VALUES (?, ?)",
+                group.get_uuid(),
+                self.uuid
+            )
+            .execute(&mut *tx)
+            .await?;
         }
-        if let Some(login_handles) = &changes.login_handles {
-            self.login_handles = login_handles.to_vec()
+
+        Ok(())
+    }
+
+    pub fn apply_changes(&mut self, changes: UserChange) {
+        if let Some(display_name) = changes.display_name {
+            self.display_name = display_name
+        }
+        if let Some(login_handles) = changes.login_handles {
+            self.login_handles = login_handles
+        }
+        if let Some(direct_groups) = changes.direct_groups {
+            self.direct_groups = direct_groups
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserChange {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub login_handles: Option<Vec<LoginHandle>>,
 }

@@ -173,7 +173,7 @@ async fn put_user_endpoint(
         "new" => User::new(),
         _ => User::load_by_login_handle(handle, &mut tx).await?,
     };
-    user.apply_changes(&info);
+    user.apply_changes(info.into_inner());
     debug!("{:?}", user);
     user.save(&mut tx).await?;
     tx.commit().await?;
