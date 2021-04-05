@@ -21,6 +21,9 @@ pub use actix_web::dev::Body as ActixWebBody;
 pub use actix_web::http::header as httpHeader;
 pub use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 
+pub use oso::errors::OsoError as OsoErrorReal;
+pub use oso::PolarClass;
+
 pub use argonautica::Error as ArgoErrorReal;
 
 pub use crate::model::*;
@@ -52,7 +55,7 @@ pub fn unwrap_or_log<T, E: std::fmt::Debug>(input: Result<T, E>, msg: &str) -> T
     }
 }
 
-#[derive(Debug,Serialize)]
+#[derive(Debug, Serialize)]
 pub enum InvalidValue {
     OutOfRange(&'static str, usize, usize), // field name, min, max
 }
@@ -79,11 +82,12 @@ pub enum FErrorInner {
     ArgoError(ArgoErrorReal),
     #[allow(unused)]
     FauxPanic(&'static str, Option<String>),
+    OsoError(OsoErrorReal),
 }
 
 pub use FErrorInner::{
-    ArgoError, FauxPanic, IOError, NotImplemented, SQLError, SerializationError, StaleSession,
-    UuidParseError, ValidationError,
+    ArgoError, FauxPanic, IOError, NotImplemented, OsoError, SQLError, SerializationError,
+    StaleSession, UuidParseError, ValidationError,
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -134,7 +138,7 @@ impl FError {
     pub fn is_validation(&self) -> bool {
         match &self.inner {
             ValidationError(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -155,6 +159,7 @@ impl std::fmt::Display for FErrorInner {
             UuidParseError(_) => "uuid parse error",
             ArgoError(_) => "argonautica error",
             FauxPanic(_, _) => "faux panic error",
+            OsoError(_) => "Oso error",
         };
         fmt.write_str(kind)
     }
@@ -229,6 +234,19 @@ impl std::convert::From<ArgoErrorReal> for FError {
     }
 }
 
+impl std::convert::From<OsoErrorReal> for FError {
+    #[track_caller]
+    fn from(err: OsoErrorReal) -> Self {
+        let loc = Location::caller();
+        FError {
+            file: loc.file().to_string(),
+            line: loc.line(),
+            col: loc.column(),
+            inner: OsoError(err),
+        }
+    }
+}
+
 #[track_caller]
 pub fn parse_uuid_vec(val: Vec<u8>) -> FResult<Uuid> {
     match Uuid::from_slice(&val) {
@@ -244,4 +262,60 @@ pub fn parse_uuid_str(val: &str) -> FResult<Uuid> {
         Ok(v) => Ok(v),
         Err(_) => Err(FError::new(UuidParseError(val.to_string()))),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MinObject {
+    uuid: Uuid,
+    kind: String,
+}
+
+impl MinObject {
+    pub fn get_uuid(&self) -> Uuid {
+        return self.uuid;
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum UuidObjectOption {
+    NoObject,
+    OneObject(Uuid),
+    ObjectsInGroup(Uuid)
+}
+
+pub use UuidObjectOption::{NoObject, OneObject, ObjectsInGroup};
+
+impl UuidObjectOption {
+    pub fn new(uuid: Option<Uuid>, as_group: bool) -> Self {
+        match uuid {
+            Some(uuid) => match as_group {
+                true => ObjectsInGroup(uuid),
+                false => OneObject(uuid),
+            },
+            None => NoObject,
+        }
+    }
+
+    pub fn is_for_group(&self) -> bool {
+        match self {
+            ObjectsInGroup(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn to_uuid_option(&self) -> Option<Uuid> {
+        match self {
+            NoObject => None,
+            OneObject(uuid) => Some(*uuid),
+            ObjectsInGroup(uuid) => Some(*uuid)
+        }
+    }
+
+    pub fn to_pair(&self, uuid: Option<Uuid>, as_group: bool) -> (Option<Uuid>, bool) {
+        (self.to_uuid_option(), self.is_for_group())
+    }
+}
+
+impl Default for UuidObjectOption {
+    fn default() -> Self { NoObject }
 }

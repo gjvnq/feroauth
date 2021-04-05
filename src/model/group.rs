@@ -1,9 +1,13 @@
 use crate::model::prelude::*;
-use std::collections::HashSet;
 
-#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
+pub const MAX_GROUP_NAME_LEN: usize = 190;
+
+#[derive(Debug, Clone, Eq, PolarClass, Serialize, Deserialize)]
+// Note that equality for [`MinGroup`] is determined solely by the UUID
 pub struct MinGroup {
+    #[polar(attribute)]
     uuid: Uuid,
+    #[polar(attribute)]
     pub name: String,
 }
 
@@ -24,14 +28,14 @@ impl MinGroup {
     pub async fn load_for(
         uuid: Uuid,
         tx: &mut Transaction<'_>,
-    ) -> FResult<(HashSet<MinGroup>, HashSet<MinGroup>)> {
+    ) -> FResult<(FSet<MinGroup>, FSet<MinGroup>)> {
         let rows = sqlx::query!(
             "SELECT `group_uuid`, `group_name` FROM `group_members_view` WHERE `member_uuid` = ?",
             uuid
         )
         .fetch_all(&mut *tx)
         .await?;
-        let mut direct_groups = HashSet::new();
+        let mut direct_groups = FSet::new();
         for row in rows {
             direct_groups.insert(MinGroup::new(
                 parse_uuid_vec(row.group_uuid)?,
@@ -86,5 +90,144 @@ impl HashTrait for MinGroup {
         H: std::hash::Hasher,
     {
         self.uuid.hash(state)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Group {
+    uuid: Uuid,
+    _revision: i32,
+    pub name: String,
+    pub desc: String,
+    direct_members: Option<Vec<MinObject>>,
+}
+
+impl Group {
+    pub fn new(uuid: Uuid, name: &str, desc: &str) -> Self {
+        Group {
+            uuid,
+            _revision: 0,
+            name: name.to_string(),
+            desc: desc.to_string(),
+            direct_members: None,
+        }
+    }
+
+    #[inline]
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
+
+    pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<Self> {
+        trace!("Loading group {:?}", uuid);
+        let row = sqlx::query!(
+            "SELECT `uuid`, `_revision`, `name`, `desc` FROM `group` WHERE `uuid` = ?",
+            uuid
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let uuid = parse_uuid_vec(row.uuid)?;
+
+        Ok(Group {
+            uuid,
+            _revision: row._revision,
+            name: row.name,
+            desc: row.desc,
+            direct_members: None,
+        })
+    }
+
+    pub fn validate(&self) -> Vec<InvalidValue> {
+        let len = self.name.chars().count();
+        let mut ans = vec![];
+        if !(MIN_NON_EMPTY_STR < len && len <= MAX_GROUP_NAME_LEN) {
+            ans.push(InvalidValue::OutOfRange(
+                "group.name",
+                MIN_NON_EMPTY_STR,
+                MAX_GROUP_NAME_LEN,
+            ))
+        }
+        ans
+    }
+
+    pub fn validate_as_err(&self) -> FResult<()> {
+        let errs = self.validate();
+        if errs.len() != 0 {
+            return Err(FError::new(ValidationError(errs)));
+        }
+        Ok(())
+    }
+
+    pub async fn save(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        trace!("Saving group {:?}", self.uuid);
+
+        self.validate_as_err()?;
+
+        match self._revision {
+            0 => self.db_insert(tx).await,
+            _ => self.db_update(tx).await,
+        }
+    }
+
+    pub async fn delete(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!("DELETE FROM `group` WHERE `uuid` = ?", uuid)
+            .execute(&mut *tx)
+            .await?;
+        Ok(())
+    }
+
+    async fn db_insert(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        self._revision = 1;
+        sqlx::query!(
+            "INSERT INTO `group` (`uuid`, `_revision`, `name`, `desc`) VALUES (?, ?, ?, ?)",
+            self.uuid,
+            self._revision,
+            self.name,
+            self.desc
+        )
+        .execute(&mut *tx)
+        .await?;
+        self.db_save_members(tx).await?;
+        Ok(())
+    }
+
+    async fn db_update(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        self._revision += 1;
+        sqlx::query!(
+            "UPDATE `group` SET `_revision` = ?, `name` = ?, `desc` = ? WHERE `uuid` = ?",
+            self._revision,
+            self.name,
+            self.desc,
+            self.uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+        self.db_save_members(tx).await?;
+        Ok(())
+    }
+
+    async fn db_save_members(&self, tx: &mut Transaction<'_>) -> FResult<()> {
+        let direct_members = match &self.direct_members {
+            Some(v) => v,
+            None => return Ok(()),
+        };
+        sqlx::query!(
+            "DELETE FROM `group_members` WHERE `group_uuid` = ?",
+            self.uuid
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        for member in direct_members {
+            sqlx::query!(
+                "INSERT INTO `group_members` (`group_uuid`, `member_uuid`) VALUES (?, ?)",
+                self.uuid,
+                member.get_uuid()
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        Ok(())
     }
 }

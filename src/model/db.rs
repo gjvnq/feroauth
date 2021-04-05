@@ -21,7 +21,7 @@ pub async fn get_pool(
         .password(&db_pass)
         .database(&db_name);
 
-    conn_opts.log_statements(log::LevelFilter::Debug);
+    conn_opts.log_statements(log::LevelFilter::Trace);
     let pool = MySqlPoolOptions::new()
         .connect_with(conn_opts)
         .await

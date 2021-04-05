@@ -1,22 +1,30 @@
 use crate::model::prelude::*;
-use std::collections::HashSet;
 
 pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PolarClass, Serialize, Deserialize)]
+// todo: make everythin private to help with permissions
 pub struct User {
+    #[polar(attribute)]
     uuid: Uuid,
+    #[polar(attribute)]
+    pub superuser: bool,
+    #[polar(attribute)]
+    pub login_handles: FSet<LoginHandle>,
+    #[polar(attribute)]
+    pub groups: FSet<MinGroup>,
+
     pub display_name: String,
     added: Option<DateTime<Utc>>,
     last_login: Option<DateTime<Utc>>,
-    pub login_handles: Vec<LoginHandle>,
-    pub direct_groups: HashSet<MinGroup>,
-    pub all_groups: HashSet<MinGroup>,
+    pub direct_groups: FSet<MinGroup>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PolarClass, Serialize, Deserialize)]
 pub struct LoginHandle {
+    #[polar(attribute)]
     handle: String,
+    #[polar(attribute)]
     kind: String,
 }
 
@@ -25,9 +33,9 @@ pub struct UserChange {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub login_handles: Option<Vec<LoginHandle>>,
+    pub login_handles: Option<FSet<LoginHandle>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub direct_groups: Option<HashSet<MinGroup>>,
+    pub direct_groups: Option<FSet<MinGroup>>,
 }
 
 // This is used when we need just a vague idea of the user (e.g. when storing sessions via [`FullSession`])
@@ -114,12 +122,13 @@ impl User {
     pub fn new() -> User {
         User {
             uuid: Uuid::new_v4(),
+            superuser: true,
             display_name: "".to_string(),
             added: None,
             last_login: None,
-            login_handles: vec![],
-            direct_groups: HashSet::new(),
-            all_groups: HashSet::new(),
+            login_handles: FSet::new(),
+            direct_groups: FSet::new(),
+            groups: FSet::new(),
         }
     }
 
@@ -144,7 +153,7 @@ impl User {
         Ok(())
     }
 
-    async fn load_login_handles(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<Vec<LoginHandle>> {
+    async fn load_login_handles(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<FSet<LoginHandle>> {
         let handle_row = sqlx::query!(
             "SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?",
             uuid
@@ -152,12 +161,12 @@ impl User {
         .fetch_all(&mut *tx)
         .await?;
 
-        let mut handles = vec![];
+        let mut handles = FSet::new();
         for handle in handle_row {
-            handles.push(LoginHandle {
+            handles.insert(LoginHandle {
                 handle: handle.login_handle,
                 kind: handle.kind,
-            })
+            });
         }
 
         Ok(handles)
@@ -166,7 +175,7 @@ impl User {
     async fn load_groups(
         uuid: Uuid,
         tx: &mut Transaction<'_>,
-    ) -> FResult<(HashSet<MinGroup>, HashSet<MinGroup>)> {
+    ) -> FResult<(FSet<MinGroup>, FSet<MinGroup>)> {
         MinGroup::load_for(uuid, tx).await
     }
 
@@ -174,7 +183,7 @@ impl User {
     pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {
         trace!("Loading user {:?}", uuid);
         let base_row = sqlx::query!(
-            "SELECT `uuid`, `display_name`, `added`, `last_login` FROM `user` WHERE `uuid` = ?",
+            "SELECT `uuid`, `superuser`, `display_name`, `added`, `last_login` FROM `user` WHERE `uuid` = ?",
             uuid
         )
         .fetch_one(&mut *tx)
@@ -189,11 +198,12 @@ impl User {
         .await?;
         let uuid = parse_uuid_vec(base_row.uuid)?;
 
-        let (direct_groups, all_groups) = User::load_groups(uuid, tx).await?;
+        let (direct_groups, groups) = User::load_groups(uuid, tx).await?;
         let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
             uuid: uuid,
+            superuser: base_row.superuser != 0,
             display_name: base_row.display_name,
             added: Some(Utc.from_utc_datetime(&base_row.added)),
             last_login: base_row
@@ -202,7 +212,7 @@ impl User {
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
             direct_groups: direct_groups,
-            all_groups: all_groups,
+            groups: groups,
         })
     }
 
@@ -219,18 +229,19 @@ impl User {
         }
 
         let base_row = sqlx::query!(
-            "SELECT `user`.`uuid`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
+            "SELECT `user`.`uuid`, `user`.`superuser`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
             login_handle
         )
         .fetch_one(&mut *tx)
         .await?;
         let uuid = parse_uuid_vec(base_row.uuid)?;
 
-        let (direct_groups, all_groups) = User::load_groups(uuid, tx).await?;
+        let (direct_groups, groups) = User::load_groups(uuid, tx).await?;
         let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
             uuid: uuid,
+            superuser: base_row.superuser != 0,
             display_name: base_row.display_name,
             added: Some(Utc.from_utc_datetime(&base_row.added)),
             last_login: base_row
@@ -239,7 +250,7 @@ impl User {
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
             direct_groups: direct_groups,
-            all_groups: all_groups,
+            groups: groups,
         })
     }
 
@@ -324,6 +335,13 @@ impl User {
             .await?;
         }
 
+        Ok(())
+    }
+
+    pub async fn delete(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<()> {
+        sqlx::query!("DELETE FROM `user` WHERE `uuid` = ?", uuid)
+            .execute(&mut *tx)
+            .await?;
         Ok(())
     }
 

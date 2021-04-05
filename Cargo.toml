@@ -24,3 +24,4 @@ dotenv = "0.15.0"
 env_logger = "0.7.1"
 base64 = "0.13.0"
 futures-util = "0.3.5"
+oso = { version = "0.11.3", features = [ "uuid-07" ] }
