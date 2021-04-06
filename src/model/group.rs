@@ -2,114 +2,27 @@ use crate::model::prelude::*;
 
 pub const MAX_GROUP_NAME_LEN: usize = 190;
 
-#[derive(Debug, Clone, Eq, PolarClass, Serialize, Deserialize)]
-// Note that equality for [`MinGroup`] is determined solely by the UUID
-pub struct MinGroup {
-    #[polar(attribute)]
-    uuid: Uuid,
-    #[polar(attribute)]
-    pub name: String,
-}
-
-impl MinGroup {
-    pub fn new(uuid: Uuid, name: &str) -> Self {
-        MinGroup {
-            uuid,
-            name: name.to_string(),
-        }
-    }
-
-    #[inline]
-    pub fn get_uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    // (direct groups, all groups)
-    pub async fn load_for(
-        uuid: Uuid,
-        tx: &mut Transaction<'_>,
-    ) -> FResult<(FSet<MinGroup>, FSet<MinGroup>)> {
-        let rows = sqlx::query!(
-            "SELECT `group_uuid`, `group_name` FROM `group_members_view` WHERE `member_uuid` = ?",
-            uuid
-        )
-        .fetch_all(&mut *tx)
-        .await?;
-        let mut direct_groups = FSet::new();
-        for row in rows {
-            direct_groups.insert(MinGroup::new(
-                parse_uuid_vec(row.group_uuid)?,
-                &row.group_name,
-            ));
-        }
-
-        let mut all_groups = direct_groups.clone();
-        let mut old_count = 0;
-        // Until all_groups size stabilizes...
-        while old_count != all_groups.len() {
-            old_count = all_groups.len();
-
-            // ... construct a query to find the parents ...
-            let mut sql_query = "SELECT `group_uuid`, `group_name` FROM `group_members_view` WHERE `member_uuid` IN (".to_string();
-            let mut first_flag = true;
-            for _ in 0..all_groups.len() {
-                if first_flag {
-                    sql_query += "?";
-                    first_flag = false;
-                } else {
-                    sql_query += ", ?";
-                }
-            }
-            sql_query += ")";
-
-            let mut query = sqlx::query_as(&sql_query);
-            for group in &all_groups {
-                query = query.bind(group.get_uuid());
-            }
-            let rows: Vec<(Uuid, String)> = query.fetch_all(&mut *tx).await?;
-
-            // ... and add each result to all_groups
-            for row in rows {
-                all_groups.insert(MinGroup::new(row.0, &row.1));
-            }
-        }
-
-        Ok((direct_groups, all_groups))
-    }
-}
-
-impl PartialEq for MinGroup {
-    fn eq(&self, other: &Self) -> bool {
-        self.uuid == other.uuid
-    }
-}
-
-impl HashTrait for MinGroup {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.uuid.hash(state)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PolarClass)]
 pub struct Group {
+    #[polar(attribute)]
     uuid: Uuid,
     _revision: i32,
     pub name: String,
     pub desc: String,
-    direct_members: Option<Vec<MinObject>>,
+    members: Option<Vec<MinObject>>,
+    #[polar(attribute)]
+    pub groups: GroupMembership,
 }
 
 impl Group {
     pub fn new(uuid: Uuid, name: &str, desc: &str) -> Self {
         Group {
             uuid,
-            _revision: 0,
+            _revision: 1,
             name: name.to_string(),
             desc: desc.to_string(),
-            direct_members: None,
+            members: None,
+            groups: GroupMembership::new()
         }
     }
 
@@ -133,7 +46,8 @@ impl Group {
             _revision: row._revision,
             name: row.name,
             desc: row.desc,
-            direct_members: None,
+            members: None,
+            groups: GroupMembership::load_for(uuid, tx).await?
         })
     }
 
@@ -164,9 +78,12 @@ impl Group {
         self.validate_as_err()?;
 
         match self._revision {
-            0 => self.db_insert(tx).await,
-            _ => self.db_update(tx).await,
-        }
+            0 => self.db_insert(tx).await?,
+            _ => self.db_update(tx).await?,
+        };
+        self.db_save_members(tx).await?;
+        self.groups.save_for(self.uuid, tx).await?;
+        Ok(())
     }
 
     pub async fn delete(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<()> {
@@ -187,7 +104,6 @@ impl Group {
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_members(tx).await?;
         Ok(())
     }
 
@@ -202,12 +118,11 @@ impl Group {
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_members(tx).await?;
         Ok(())
     }
 
     async fn db_save_members(&self, tx: &mut Transaction<'_>) -> FResult<()> {
-        let direct_members = match &self.direct_members {
+        let direct_members = match &self.members {
             Some(v) => v,
             None => return Ok(()),
         };

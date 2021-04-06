@@ -2,8 +2,9 @@ use crate::model::prelude::*;
 
 pub const MAX_POLICY_RULE_TITLE_LEN: usize = 190;
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, PolarClass)]
 struct PolicyRule {
+    #[polar(attribute)]
     uuid: Uuid,
     _revision: i32,
     /// Unique title given to the rule for the purpose  of admin organization
@@ -12,6 +13,8 @@ struct PolicyRule {
     pub desc: String,
     /// Code in Polar for [Oso](https://osohq.com)
     pub code: String,
+    #[polar(attribute)]
+    pub groups: GroupMembership,
 }
 
 impl PolicyRule {
@@ -38,6 +41,7 @@ impl PolicyRule {
             title: row.title,
             desc: row.desc,
             code: row.code,
+            groups: GroupMembership::new()
         })
     }
 
@@ -51,12 +55,14 @@ impl PolicyRule {
 
         let mut ans = Vec::new();
         for row in rows {
+            let uuid = parse_uuid_vec(row.uuid)?;
             ans.push(PolicyRule {
-                uuid: parse_uuid_vec(row.uuid)?,
+                uuid,
                 _revision: row._revision,
                 title: row.title,
                 desc: row.desc,
                 code: row.code,
+                groups: GroupMembership::load_for(uuid, tx).await?
             })
         }
         Ok(ans)
@@ -98,9 +104,11 @@ impl PolicyRule {
         self.validate_as_err()?;
 
         match self._revision {
-            0 => self.db_insert(tx).await,
-            _ => self.db_update(tx).await,
-        }
+            0 => self.db_insert(tx).await?,
+            _ => self.db_update(tx).await?,
+        };
+        self.groups.save_for(self.uuid, tx).await?;
+        Ok(())
     }
 
     async fn db_insert(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {

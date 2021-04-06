@@ -7,17 +7,17 @@ pub const MAX_DISPLAY_NAME_LEN: usize = 30;
 pub struct User {
     #[polar(attribute)]
     uuid: Uuid,
+    _revision: i32,
     #[polar(attribute)]
     pub superuser: bool,
     #[polar(attribute)]
     pub login_handles: FSet<LoginHandle>,
     #[polar(attribute)]
-    pub groups: FSet<MinGroup>,
+    pub groups: GroupMembership,
 
     pub display_name: String,
     added: Option<DateTime<Utc>>,
     last_login: Option<DateTime<Utc>>,
-    pub direct_groups: FSet<MinGroup>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PolarClass, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct UserChange {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub login_handles: Option<FSet<LoginHandle>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub direct_groups: Option<FSet<MinGroup>>,
+    pub groups: Option<GroupMembership>,
 }
 
 // This is used when we need just a vague idea of the user (e.g. when storing sessions via [`FullSession`])
@@ -122,13 +122,13 @@ impl User {
     pub fn new() -> User {
         User {
             uuid: Uuid::new_v4(),
-            superuser: true,
+            _revision: 1,
+            superuser: false,
             display_name: "".to_string(),
             added: None,
             last_login: None,
             login_handles: FSet::new(),
-            direct_groups: FSet::new(),
-            groups: FSet::new(),
+            groups: GroupMembership::new(),
         }
     }
 
@@ -172,18 +172,11 @@ impl User {
         Ok(handles)
     }
 
-    async fn load_groups(
-        uuid: Uuid,
-        tx: &mut Transaction<'_>,
-    ) -> FResult<(FSet<MinGroup>, FSet<MinGroup>)> {
-        MinGroup::load_for(uuid, tx).await
-    }
-
     #[allow(unused)]
     pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {
         trace!("Loading user {:?}", uuid);
         let base_row = sqlx::query!(
-            "SELECT `uuid`, `superuser`, `display_name`, `added`, `last_login` FROM `user` WHERE `uuid` = ?",
+            "SELECT `uuid`, `_revision`, `superuser`, `display_name`, `added`, `last_login` FROM `user` WHERE `uuid` = ?",
             uuid
         )
         .fetch_one(&mut *tx)
@@ -198,11 +191,11 @@ impl User {
         .await?;
         let uuid = parse_uuid_vec(base_row.uuid)?;
 
-        let (direct_groups, groups) = User::load_groups(uuid, tx).await?;
         let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
             uuid: uuid,
+            _revision: base_row._revision,
             superuser: base_row.superuser != 0,
             display_name: base_row.display_name,
             added: Some(Utc.from_utc_datetime(&base_row.added)),
@@ -211,8 +204,7 @@ impl User {
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
-            direct_groups: direct_groups,
-            groups: groups,
+            groups: GroupMembership::load_for(uuid, tx).await?
         })
     }
 
@@ -229,18 +221,18 @@ impl User {
         }
 
         let base_row = sqlx::query!(
-            "SELECT `user`.`uuid`, `user`.`superuser`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
+            "SELECT `user`.`uuid`, `user`.`_revision`, `user`.`superuser`, `user`.`display_name`, `user`.`added`, `user`.`last_login` FROM `user` JOIN `login_handle` ON (`user`.`uuid` = `login_handle`.`user_uuid`) WHERE `login_handle` =  ?",
             login_handle
         )
         .fetch_one(&mut *tx)
         .await?;
         let uuid = parse_uuid_vec(base_row.uuid)?;
 
-        let (direct_groups, groups) = User::load_groups(uuid, tx).await?;
         let login_handles = User::load_login_handles(uuid, tx).await?;
 
         Ok(User {
             uuid: uuid,
+            _revision: base_row._revision,
             superuser: base_row.superuser != 0,
             display_name: base_row.display_name,
             added: Some(Utc.from_utc_datetime(&base_row.added)),
@@ -249,8 +241,7 @@ impl User {
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
-            direct_groups: direct_groups,
-            groups: groups,
+            groups: GroupMembership::load_for(uuid, tx).await?
         })
     }
 
@@ -260,38 +251,41 @@ impl User {
         self.validate_as_err()?;
 
         match self.added {
-            Some(_) => self.db_update(tx).await,
-            None => self.db_insert(tx).await,
-        }
+            Some(_) => self.db_update(tx).await?,
+            None => self.db_insert(tx).await?,
+        };
+        self.db_save_login_handles(tx).await?;
+        self.groups.save_for(self.uuid, tx).await?;
+        Ok(())
     }
 
     async fn db_insert(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
         self.last_login = None;
         self.added = Some(Utc::now());
+        self._revision = 1;
         sqlx::query!(
-            "INSERT INTO `user` (`uuid`, `display_name`, `added`, `last_login`) VALUES (?, ?, ?, ?)",
+            "INSERT INTO `user` (`uuid`, `_revision`, `display_name`, `added`, `last_login`) VALUES (?, ?, ?, ?, ?)",
             self.uuid,
+            self._revision,
             self.display_name,
             self.added,
             self.last_login
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_login_handles(tx).await?;
-        self.db_save_groups(tx).await?;
         Ok(())
     }
 
-    async fn db_update(&self, tx: &mut Transaction<'_>) -> FResult<()> {
+    async fn db_update(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+        self._revision += 1;
         sqlx::query!(
-            "UPDATE `user` SET `display_name` = ? WHERE `uuid` = ?",
+            "UPDATE `user` SET `_revision` = ?, `display_name` = ? WHERE `uuid` = ?",
+            self._revision,
             self.display_name,
             self.uuid
         )
         .execute(&mut *tx)
         .await?;
-        self.db_save_login_handles(tx).await?;
-        self.db_save_groups(tx).await?;
         Ok(())
     }
 
@@ -317,27 +311,6 @@ impl User {
         Ok(())
     }
 
-    async fn db_save_groups(&self, tx: &mut Transaction<'_>) -> FResult<()> {
-        sqlx::query!(
-            "DELETE FROM `group_members` WHERE `member_uuid` = ?",
-            self.uuid
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        for group in &self.direct_groups {
-            sqlx::query!(
-                "INSERT INTO `group_members` (`group_uuid`, `member_uuid`) VALUES (?, ?)",
-                group.get_uuid(),
-                self.uuid
-            )
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        Ok(())
-    }
-
     pub async fn delete(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<()> {
         sqlx::query!("DELETE FROM `user` WHERE `uuid` = ?", uuid)
             .execute(&mut *tx)
@@ -352,8 +325,8 @@ impl User {
         if let Some(login_handles) = changes.login_handles {
             self.login_handles = login_handles
         }
-        if let Some(direct_groups) = changes.direct_groups {
-            self.direct_groups = direct_groups
+        if let Some(groups) = changes.groups {
+            self.groups = groups
         }
     }
 }
