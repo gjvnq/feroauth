@@ -1,5 +1,6 @@
-use std::collections::HashMap;
 use crate::model::prelude::*;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PolarClass)]
 // the i32 indicates the level of indirection where 0 means direct
@@ -10,13 +11,49 @@ impl GroupMembership {
         GroupMembership(HashMap::new())
     }
 
+    pub fn add(&mut self, uuid: Uuid, name: &str) {
+        self.0.insert(uuid, (name.to_string(), 0));
+    }
+
+    pub fn has(&self, uuid: Uuid) -> bool {
+        self.0.get(&uuid).is_some()
+    }
+
+    pub fn to_keys_set(&self) -> HashSet<Uuid> {
+        self.0.keys().cloned().collect()
+    }
+
+    pub fn has_intersection(&self, other: &GroupMembership) -> bool {
+        let set1 = self.to_keys_set();
+        let set2 = other.to_keys_set();
+        let mut intersection = set1.intersection(&set2).next();
+        intersection.is_some()
+    }
+
+    pub fn polar_has_intersection(&self, other: GroupMembership) -> bool {
+        self.has_intersection(&other)
+    }
+
+    #[track_caller]
+    pub fn polar_has_uuid(&self, val: String) -> bool {
+        self.has_str(&val)
+    }
+
+    #[track_caller]
+    pub fn has_str(&self, val: &str) -> bool {
+        match parse_uuid_str(&val) {
+            Ok(uuid) => self.has(uuid),
+            Err(err) => {
+                error!("{:?}", err);
+                false
+            }
+        }
+    }
+
     pub async fn save_for(&self, uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<()> {
-        sqlx::query!(
-            "DELETE FROM `group_members` WHERE `member_uuid` = ?",
-            uuid
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query!("DELETE FROM `group_members` WHERE `member_uuid` = ?", uuid)
+            .execute(&mut *tx)
+            .await?;
 
         for (group, (_, level)) in &self.0 {
             // Save only direct group memberships
@@ -34,10 +71,7 @@ impl GroupMembership {
         Ok(())
     }
 
-    pub async fn load_for(
-        uuid: Uuid,
-        tx: &mut Transaction<'_>,
-    ) -> FResult<GroupMembership> {
+    pub async fn load_for(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<GroupMembership> {
         let rows = sqlx::query!(
             "SELECT `group_uuid`, `group_name` FROM `group_members_view` WHERE `member_uuid` = ?",
             uuid

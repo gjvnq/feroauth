@@ -6,6 +6,7 @@ pub mod group;
 pub mod group_membership;
 pub mod password;
 pub mod policy_delegation;
+pub mod policy_enforcer;
 pub mod policy_rule;
 pub mod prelude;
 pub mod session;
@@ -40,8 +41,11 @@ pub const POLVERB_GROUP_MEMBER_DEL_ANYKIND: &'static str = "feroauth/group.del-a
 pub const POLVERB_POLICY_RULE_SET: &'static str = "feroauth/policy_rule.set";
 
 pub use fset::FSet;
-pub use group::{MinGroup, Group};
+pub use group::Group;
 pub use group_membership::GroupMembership;
 pub use password::Password;
+pub use policy_delegation::PolicyDelegation;
+pub use policy_enforcer::PolicyEnforcer;
+pub use policy_rule::PolicyRule;
 pub use session::FullSession;
 pub use user::{MinUser, User, UserChange};

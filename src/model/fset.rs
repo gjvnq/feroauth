@@ -230,14 +230,22 @@ where
     }
 }
 
-impl<T,S> std::convert::From<HashSet<T,S>> for FSet<T,S> where T: Eq + Hash, S: BuildHasher {
-    fn from(val: HashSet<T,S>) -> Self {
+impl<T, S> std::convert::From<HashSet<T, S>> for FSet<T, S>
+where
+    T: Eq + Hash,
+    S: BuildHasher,
+{
+    fn from(val: HashSet<T, S>) -> Self {
         FSet(val)
     }
 }
 
-impl<T,S> std::convert::Into<HashSet<T,S>> for FSet<T,S> where T: Eq + Hash, S: BuildHasher {
-    fn into(self) -> HashSet<T,S> {
+impl<T, S> std::convert::Into<HashSet<T, S>> for FSet<T, S>
+where
+    T: Eq + Hash,
+    S: BuildHasher,
+{
+    fn into(self) -> HashSet<T, S> {
         self.0
     }
 }

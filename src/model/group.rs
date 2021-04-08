@@ -22,7 +22,7 @@ impl Group {
             name: name.to_string(),
             desc: desc.to_string(),
             members: None,
-            groups: GroupMembership::new()
+            groups: GroupMembership::new(),
         }
     }
 
@@ -47,7 +47,7 @@ impl Group {
             name: row.name,
             desc: row.desc,
             members: None,
-            groups: GroupMembership::load_for(uuid, tx).await?
+            groups: GroupMembership::load_for(uuid, tx).await?,
         })
     }
 

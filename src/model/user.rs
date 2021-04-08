@@ -122,7 +122,7 @@ impl User {
     pub fn new() -> User {
         User {
             uuid: Uuid::new_v4(),
-            _revision: 1,
+            _revision: 0,
             superuser: false,
             display_name: "".to_string(),
             added: None,
@@ -153,7 +153,10 @@ impl User {
         Ok(())
     }
 
-    async fn load_login_handles(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<FSet<LoginHandle>> {
+    async fn load_login_handles(
+        uuid: Uuid,
+        tx: &mut Transaction<'_>,
+    ) -> FResult<FSet<LoginHandle>> {
         let handle_row = sqlx::query!(
             "SELECT `login_handle`, `kind` FROM `login_handle` WHERE `user_uuid` = ?",
             uuid
@@ -204,7 +207,7 @@ impl User {
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
-            groups: GroupMembership::load_for(uuid, tx).await?
+            groups: GroupMembership::load_for(uuid, tx).await?,
         })
     }
 
@@ -241,7 +244,7 @@ impl User {
                 .as_ref()
                 .map(|dt| Utc.from_utc_datetime(dt)),
             login_handles: login_handles,
-            groups: GroupMembership::load_for(uuid, tx).await?
+            groups: GroupMembership::load_for(uuid, tx).await?,
         })
     }
 
@@ -250,9 +253,9 @@ impl User {
 
         self.validate_as_err()?;
 
-        match self.added {
-            Some(_) => self.db_update(tx).await?,
-            None => self.db_insert(tx).await?,
+        match self._revision {
+            0 => self.db_insert(tx).await?,
+            _ => self.db_update(tx).await?,
         };
         self.db_save_login_handles(tx).await?;
         self.groups.save_for(self.uuid, tx).await?;

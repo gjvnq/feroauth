@@ -2,7 +2,7 @@ use crate::model::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 // make everything private to help enforce permissions!
-struct PolicyDelegation {
+pub struct PolicyDelegation {
     uuid: Uuid,
     _revision: i32,
     desc: String,
@@ -26,4 +26,3 @@ struct PolicyDelegationChange {
     pub granted_at: Option<DateTime<Utc>>,
     pub valid_until: Option<DateTime<Utc>>,
 }
-

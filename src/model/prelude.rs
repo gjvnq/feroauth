@@ -1,12 +1,11 @@
 pub use log::{debug, error, info, trace, warn};
 
+pub use std::hash::Hash as HashTrait;
 pub use std::io::Error as IOErrorReal;
 pub use std::io::ErrorKind as IOErrorKind;
 pub use std::io::Result as IOResult;
-
 pub use std::net::IpAddr;
-
-pub use std::hash::Hash as HashTrait;
+use std::sync::TryLockError;
 
 pub use serde::{Deserialize, Serialize};
 
@@ -80,14 +79,15 @@ pub enum FErrorInner {
     StaleSession(Uuid),
     UuidParseError(String),
     ArgoError(ArgoErrorReal),
+    LockError,
     #[allow(unused)]
     FauxPanic(&'static str, Option<String>),
     OsoError(OsoErrorReal),
 }
 
 pub use FErrorInner::{
-    ArgoError, FauxPanic, IOError, NotImplemented, OsoError, SQLError, SerializationError,
-    StaleSession, UuidParseError, ValidationError,
+    ArgoError, FauxPanic, IOError, LockError, NotImplemented, OsoError, SQLError,
+    SerializationError, StaleSession, UuidParseError, ValidationError,
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -152,6 +152,7 @@ impl std::fmt::Display for FErrorInner {
         let kind = match self {
             SerializationError(_) => "serialization error",
             NotImplemented => "not implemented error",
+            LockError => "lock error",
             ValidationError(_) => "validation error",
             SQLError(_) => "SQL error",
             IOError(_) => "IO error",
@@ -198,52 +199,35 @@ impl actix_web::error::ResponseError for FError {
 impl std::convert::From<IOErrorReal> for FError {
     #[track_caller]
     fn from(err: IOErrorReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: IOError(err),
-        }
+        FError::new(IOError(err))
     }
 }
 
 impl std::convert::From<SQLErrorReal> for FError {
     #[track_caller]
     fn from(err: SQLErrorReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: SQLError(err),
-        }
+        FError::new(SQLError(err))
     }
 }
 
 impl std::convert::From<ArgoErrorReal> for FError {
     #[track_caller]
     fn from(err: ArgoErrorReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: ArgoError(err),
-        }
+        FError::new(ArgoError(err))
     }
 }
 
 impl std::convert::From<OsoErrorReal> for FError {
     #[track_caller]
     fn from(err: OsoErrorReal) -> Self {
-        let loc = Location::caller();
-        FError {
-            file: loc.file().to_string(),
-            line: loc.line(),
-            col: loc.column(),
-            inner: OsoError(err),
-        }
+        FError::new(OsoError(err))
+    }
+}
+
+impl<Guard> std::convert::From<TryLockError<Guard>> for FError {
+    #[track_caller]
+    fn from(_: TryLockError<Guard>) -> Self {
+        FError::new(LockError)
     }
 }
 
@@ -280,10 +264,10 @@ impl MinObject {
 pub enum UuidObjectOption {
     NoObject,
     OneObject(Uuid),
-    ObjectsInGroup(Uuid)
+    ObjectsInGroup(Uuid),
 }
 
-pub use UuidObjectOption::{NoObject, OneObject, ObjectsInGroup};
+pub use UuidObjectOption::{NoObject, ObjectsInGroup, OneObject};
 
 impl UuidObjectOption {
     pub fn new(uuid: Option<Uuid>, as_group: bool) -> Self {
@@ -299,7 +283,7 @@ impl UuidObjectOption {
     pub fn is_for_group(&self) -> bool {
         match self {
             ObjectsInGroup(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -307,7 +291,7 @@ impl UuidObjectOption {
         match self {
             NoObject => None,
             OneObject(uuid) => Some(*uuid),
-            ObjectsInGroup(uuid) => Some(*uuid)
+            ObjectsInGroup(uuid) => Some(*uuid),
         }
     }
 
@@ -317,5 +301,7 @@ impl UuidObjectOption {
 }
 
 impl Default for UuidObjectOption {
-    fn default() -> Self { NoObject }
+    fn default() -> Self {
+        NoObject
+    }
 }

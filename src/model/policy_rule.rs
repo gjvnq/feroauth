@@ -3,7 +3,7 @@ use crate::model::prelude::*;
 pub const MAX_POLICY_RULE_TITLE_LEN: usize = 190;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, PolarClass)]
-struct PolicyRule {
+pub struct PolicyRule {
     #[polar(attribute)]
     uuid: Uuid,
     _revision: i32,
@@ -41,7 +41,7 @@ impl PolicyRule {
             title: row.title,
             desc: row.desc,
             code: row.code,
-            groups: GroupMembership::new()
+            groups: GroupMembership::new(),
         })
     }
 
@@ -62,7 +62,7 @@ impl PolicyRule {
                 title: row.title,
                 desc: row.desc,
                 code: row.code,
-                groups: GroupMembership::load_for(uuid, tx).await?
+                groups: GroupMembership::load_for(uuid, tx).await?,
             })
         }
         Ok(ans)
