@@ -114,6 +114,10 @@ impl User {
         }
     }
 
+    pub fn is_new(&self) -> bool {
+        self._revision == 0
+    }
+
     #[allow(unused)]
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
@@ -132,6 +136,19 @@ impl User {
         }
     }
 
+    pub fn system_super_user() -> User {
+        User {
+            uuid: Uuid::nil(),
+            _revision: 0,
+            superuser: true,
+            display_name: "SYSTEM".to_string(),
+            added: None,
+            last_login: None,
+            login_handles: FSet::new(),
+            groups: GroupMembership::new(),
+        }
+    }
+
     pub fn validate(&self) -> Vec<InvalidValue> {
         let len = self.display_name.chars().count();
         let mut ans = vec![];
@@ -140,6 +157,11 @@ impl User {
                 "user.display_name",
                 MIN_NON_EMPTY_STR,
                 MAX_DISPLAY_NAME_LEN,
+            ))
+        }
+        if self.uuid.is_nil() {
+            ans.push(InvalidValue::MustNotNull(
+                "user.uuid"
             ))
         }
         ans
@@ -176,7 +198,7 @@ impl User {
     }
 
     #[allow(unused)]
-    pub async fn load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<User> {
+    pub async fn load_by_uuid(uuid: Uuid, as_user: &User, enforcer: &PolicyEnforcer, tx: &mut Transaction<'_>) -> FResult<User> {
         trace!("Loading user {:?}", uuid);
         let base_row = sqlx::query!(
             "SELECT `uuid`, `_revision`, `superuser`, `display_name`, `added`, `last_login` FROM `user` WHERE `uuid` = ?",
@@ -213,6 +235,7 @@ impl User {
 
     pub async fn load_by_login_handle(
         login_handle: &str,
+        as_user: &User, enforcer: &PolicyEnforcer,
         tx: &mut Transaction<'_>,
     ) -> FResult<User> {
         // Remove trouble making whitespace
@@ -220,7 +243,7 @@ impl User {
         trace!("Loading user {:?}", login_handle);
 
         if let Ok(uuid) = parse_uuid_str(login_handle) {
-            return User::load_by_uuid(uuid, tx).await;
+            return User::load_by_uuid(uuid, as_user, enforcer, tx).await;
         }
 
         let base_row = sqlx::query!(
@@ -248,8 +271,10 @@ impl User {
         })
     }
 
-    pub async fn save(&mut self, tx: &mut Transaction<'_>) -> FResult<()> {
+    pub async fn save(&mut self, as_user: &User, enforcer: &PolicyEnforcer, tx: &mut Transaction<'_>) -> FResult<()> {
         trace!("Saving user {:?}", self.uuid);
+
+        enforcer.ensure_allowed(as_user, POLVERB_USER_SAV, &self.clone())?;
 
         self.validate_as_err()?;
 

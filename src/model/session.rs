@@ -1,5 +1,4 @@
 use crate::model::prelude::*;
-use crate::model::user::{MinUser, User, UserChange};
 use actix_web::dev::Payload;
 use actix_web::Error as AWError;
 use actix_web::FromRequest;
@@ -14,9 +13,7 @@ const SESSION_LIFE_LONG: i64 = 15 * 24 * 3600; // 15 days
 struct FullSessionRaw {
     uuid: Uuid,
     user_uuid: Uuid,
-    user_display_name: String,
     real_user_uuid: Uuid,
-    real_user_display_name: String,
     login_time: DateTime<Utc>,
     last_used: DateTime<Utc>,
     remember_me: bool,
@@ -29,8 +26,8 @@ struct FullSessionRaw {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullSession {
     uuid: Uuid,
-    user: MinUser,
-    real_user: MinUser,
+    user: User,
+    real_user: User,
     login_time: DateTime<Utc>,
     last_used: DateTime<Utc>,
     remember_me: bool,
@@ -46,12 +43,12 @@ impl FullSession {
     }
 
     #[allow(unused)]
-    pub fn get_user(&self) -> &MinUser {
+    pub fn get_user(&self) -> &User {
         return &self.user;
     }
 
     #[allow(unused)]
-    pub fn get_real_user(&self) -> &MinUser {
+    pub fn get_real_user(&self) -> &User {
         return &self.real_user;
     }
 
@@ -71,8 +68,8 @@ impl FullSession {
 
     #[allow(unused)]
     pub fn new(
-        user: &MinUser,
-        real_user: &MinUser,
+        user: &User,
+        real_user: &User,
         remember_me: bool,
         ip_addr_real: &str,
         ip_addr_peer: &str,
@@ -111,10 +108,11 @@ impl FullSession {
 
     pub async fn safe_load_by_uuid(
         uuid: Uuid,
+         as_user: &User, enforcer: &PolicyEnforcer,
         db_pool: Arc<sqlx::Pool<sqlx::MySql>>,
     ) -> FResult<FullSession> {
         let mut tx = db_pool.begin().await?;
-        let mut ans = FullSession::unsafe_load_by_uuid(uuid, &mut tx).await?;
+        let mut ans = FullSession::unsafe_load_by_uuid(uuid, as_user, enforcer, &mut tx).await?;
 
         if !ans.is_valid() {
             let _ = tx.rollback().await;
@@ -132,11 +130,11 @@ impl FullSession {
     }
 
     #[allow(unused)]
-    pub async fn unsafe_load_by_uuid(uuid: Uuid, tx: &mut Transaction<'_>) -> FResult<FullSession> {
+    pub async fn unsafe_load_by_uuid(uuid: Uuid, as_user: &User, enforcer: &PolicyEnforcer,  tx: &mut Transaction<'_>) -> FResult<FullSession> {
         trace!("Loading session {:?}", uuid);
         let row = sqlx::query_as_unchecked!(
             FullSessionRaw,
-            "SELECT `uuid`, `user_uuid`, `user_display_name`, `real_user_uuid`, `real_user_display_name`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data` FROM `session_view` WHERE `uuid` = ?",
+            "SELECT `uuid`, `user_uuid`, `real_user_uuid`, `login_time`, `last_used`, `remember_me`, `ip_addr_real`, `ip_addr_peer`, `user_agent`, `data` FROM `session` WHERE `uuid` = ?",
             uuid
         )
         .fetch_one(&mut *tx)
@@ -144,8 +142,8 @@ impl FullSession {
 
         Ok(FullSession {
             uuid: row.uuid,
-            user: MinUser::new(row.user_uuid, &row.user_display_name),
-            real_user: MinUser::new(row.real_user_uuid, &row.real_user_display_name),
+            user: User::load_by_uuid(row.user_uuid, as_user, enforcer, tx).await?,
+            real_user: User::load_by_uuid(row.real_user_uuid, as_user, enforcer, tx).await?,
             login_time: row.login_time,
             last_used: row.last_used,
             remember_me: row.remember_me,

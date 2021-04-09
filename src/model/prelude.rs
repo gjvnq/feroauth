@@ -1,3 +1,4 @@
+use std::fmt;
 pub use log::{debug, error, info, trace, warn};
 
 pub use std::hash::Hash as HashTrait;
@@ -57,6 +58,7 @@ pub fn unwrap_or_log<T, E: std::fmt::Debug>(input: Result<T, E>, msg: &str) -> T
 #[derive(Debug, Serialize)]
 pub enum InvalidValue {
     OutOfRange(&'static str, usize, usize), // field name, min, max
+    MustNotNull(&'static str)
 }
 
 #[derive(Debug)]
@@ -79,6 +81,7 @@ pub enum FErrorInner {
     StaleSession(Uuid),
     UuidParseError(String),
     ArgoError(ArgoErrorReal),
+    PermissionError(String, String, String),
     LockError,
     #[allow(unused)]
     FauxPanic(&'static str, Option<String>),
@@ -87,7 +90,7 @@ pub enum FErrorInner {
 
 pub use FErrorInner::{
     ArgoError, FauxPanic, IOError, LockError, NotImplemented, OsoError, SQLError,
-    SerializationError, StaleSession, UuidParseError, ValidationError,
+    SerializationError, StaleSession, UuidParseError, ValidationError, PermissionError
 };
 
 pub type Transaction<'a> = sqlx::Transaction<'a, sqlx::mysql::MySql>;
@@ -103,6 +106,12 @@ impl FError {
             col: loc.column(),
             inner: inner,
         }
+    }
+
+    #[track_caller]
+    #[allow(unused)]
+    pub fn new_permission_error<T,U>(actor: T, verb: &str, resource: U) -> Self where T: fmt::Debug, U: fmt::Debug {
+        FError::new(FErrorInner::PermissionError(format!("{:?}", actor), verb.to_string(), format!("{:?}", resource)))
     }
 
     #[track_caller]
@@ -148,7 +157,7 @@ impl FError {
 }
 
 impl std::fmt::Display for FErrorInner {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         let kind = match self {
             SerializationError(_) => "serialization error",
             NotImplemented => "not implemented error",
@@ -160,14 +169,15 @@ impl std::fmt::Display for FErrorInner {
             UuidParseError(_) => "uuid parse error",
             ArgoError(_) => "argonautica error",
             FauxPanic(_, _) => "faux panic error",
+            PermissionError(_, _, _) => "permission error",
             OsoError(_) => "Oso error",
         };
         fmt.write_str(kind)
     }
 }
 
-impl std::fmt::Display for FError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Display for FError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         if self.is_not_found() {
             fmt.write_str("not found")
         } else if let ValidationError(errs) = &self.inner {

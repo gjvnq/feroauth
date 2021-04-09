@@ -12,10 +12,12 @@ pub mod prelude;
 pub mod session;
 pub mod user;
 
-// SET = ADD/NEW + EDIT + DEL
+// SET = ADD/NEW + SAV + DEL
+// SAV = save
 
-pub const POLVERB_USER_NEW: &'static str = "feroauth/user.new";
+pub const POLVERB_USER_ADD: &'static str = "feroauth/user.add";
 pub const POLVERB_USER_GET: &'static str = "feroauth/user.get";
+pub const POLVERB_USER_SAV: &'static str = "feroauth/user.sav";
 pub const POLVERB_USER_DEL: &'static str = "feroauth/user.del";
 pub const POLVERB_USER_SET_SUPER: &'static str = "feroauth/user.set_super";
 pub const POLVERB_USER_NAME_SET: &'static str = "feroauth/user.name.set";
@@ -28,7 +30,7 @@ pub const POLVERB_USER_GROUP_DEL: &'static str = "feroauth/user.groups.del";
 pub const POLVERB_USER_LOGIN_ADD: &'static str = "feroauth/user.login.add";
 pub const POLVERB_USER_LOGIN_DEL: &'static str = "feroauth/user.login.del";
 
-pub const POLVERB_GROUP_NEW: &'static str = "feroauth/group.new";
+pub const POLVERB_GROUP_ADD: &'static str = "feroauth/group.add";
 pub const POLVERB_GROUP_GET: &'static str = "feroauth/group.get";
 pub const POLVERB_GROUP_NAME_SET: &'static str = "feroauth/group.name.set";
 pub const POLVERB_GROUP_DESC_SET: &'static str = "feroauth/group.desc.set";

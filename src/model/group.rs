@@ -18,7 +18,7 @@ impl Group {
     pub fn new(uuid: Uuid, name: &str, desc: &str) -> Self {
         Group {
             uuid,
-            _revision: 1,
+            _revision: 0,
             name: name.to_string(),
             desc: desc.to_string(),
             members: None,

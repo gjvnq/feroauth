@@ -9,6 +9,7 @@ pub use crate::model::{Password, User};
 
 pub struct AppState {
     pub db: Arc<sqlx::Pool<sqlx::MySql>>,
+    pub enforcer: PolicyEnforcer
 }
 
 pub fn get_ip(req: &HttpRequest) -> (String, String) {

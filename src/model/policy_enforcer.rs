@@ -1,11 +1,13 @@
+use std::sync::Arc;
 use crate::model::prelude::*;
 use oso::Oso;
 use oso::ToPolar;
 use std::sync::RwLock;
 use std::sync::{RwLockReadGuard, RwLockWriteGuard, TryLockError, TryLockResult};
 
+#[derive(Clone)]
 pub struct PolicyEnforcer {
-    oso: RwLock<Oso>,
+    oso: Arc<RwLock<Oso>>,
 }
 
 impl std::fmt::Debug for PolicyEnforcer {
@@ -24,6 +26,7 @@ impl PolicyEnforcer {
     }
 
     fn add_basic_rules(oso: &Oso) -> FResult<()> {
+        oso.load_str(r#"allow(actor: User, POLVERB_USER_SAV, user: User) if allow(actor, POLVERB_USER_ADD, user) and user.is_new();"#)?;
         oso.load_str(r#"allow(actor: User, _, _) if actor.superuser;"#)?;
         oso.load_str(
             r#"allow(actor: User, action, resource) if user_allowed(actor, action, resource);"#,
@@ -36,7 +39,10 @@ impl PolicyEnforcer {
         let mut oso = Oso::new();
 
         // Make classes
-        oso.register_class(User::get_polar_class_builder().build())?;
+        oso.register_class(User::get_polar_class_builder()
+            .add_method("is_new", User::is_new)
+            .build()
+        )?;
         oso.register_class(Group::get_polar_class_builder().build())?;
         oso.register_class(
             GroupMembership::get_polar_class_builder()
@@ -45,10 +51,13 @@ impl PolicyEnforcer {
                 .build(),
         )?;
 
+        oso.register_constant(POLVERB_USER_ADD, "POLVERB_USER_ADD")?;
+        oso.register_constant(POLVERB_USER_SAV, "POLVERB_USER_SAV")?;
+
         PolicyEnforcer::add_basic_rules(&oso);
 
         Ok(PolicyEnforcer {
-            oso: RwLock::new(oso),
+            oso: Arc::new(RwLock::new(oso)),
         })
     }
 
@@ -72,6 +81,23 @@ impl PolicyEnforcer {
     }
 
     #[track_caller]
+    pub fn ensure_allowed<Resource>(
+        &self,
+        actor: &User,
+        action: &str,
+        resource: &Resource,
+    ) -> FResult<()>
+    where
+        Resource: ToPolar + std::fmt::Debug + Sync + Clone,
+    {
+        match self.is_allowed(actor.clone(), action.to_string(), resource.clone()) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(FError::new_permission_error(actor, action, &resource)),
+            Err(err) => Err(err)
+        }
+    }
+
+    #[track_caller]
     pub fn is_allowed<Actor, Action, Resource>(
         &self,
         actor: Actor,
@@ -86,6 +112,7 @@ impl PolicyEnforcer {
         Ok(self.get_oso_r()?.is_allowed(actor, action, resource)?)
     }
 }
+
 
 #[cfg(test)]
 mod tests {

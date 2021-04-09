@@ -120,6 +120,7 @@ async fn login_endpoint(
     if ans.status == LoginResponseStatus::LoggedIn {
         let (ip_addr_real, ip_addr_peer) = get_ip(&req);
         let remember_me = info.remember_me.unwrap_or(false);
+        let user = User::load_by_uuid(user.get_uuid(), &User::system_super_user(), &data.enforcer, &mut tx).await?;
         let session = FullSession::new(
             &user,
             &user,
@@ -147,13 +148,13 @@ async fn login_endpoint(
 #[get("/users/{handle}")]
 async fn get_user_endpoint(
     data: web::Data<AppState>,
-    _auth: FullSession,
+    auth: FullSession,
     path: web::Path<String>,
 ) -> FResult<HttpResponse> {
     // TODO: check permission
 
     let mut tx = data.db.begin().await.unwrap();
-    let user = User::load_by_login_handle(&path, &mut tx).await?;
+    let user = User::load_by_login_handle(&path, auth.get_user(), &data.enforcer, &mut tx).await?;
 
     return Ok(HttpResponse::Ok().json(user));
 }
@@ -161,7 +162,7 @@ async fn get_user_endpoint(
 #[put("/users/{handle}")]
 async fn put_user_endpoint(
     data: web::Data<AppState>,
-    _auth: FullSession,
+    auth: FullSession,
     info: web::Json<UserChange>,
     path: web::Path<String>,
 ) -> FResult<HttpResponse> {
@@ -171,11 +172,11 @@ async fn put_user_endpoint(
     let handle = path.as_str();
     let mut user = match handle {
         "new" => User::new(),
-        _ => User::load_by_login_handle(handle, &mut tx).await?,
+        _ => User::load_by_login_handle(handle, auth.get_user(), &data.enforcer, &mut tx).await?,
     };
     user.apply_changes(info.into_inner());
     debug!("{:?}", user);
-    user.save(&mut tx).await?;
+    user.save(auth.get_user(), &data.enforcer, &mut tx).await?;
     tx.commit().await?;
 
     return Ok(HttpResponse::Ok().json(user));

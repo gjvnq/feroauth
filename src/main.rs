@@ -26,10 +26,16 @@ async fn main() -> FResult<()> {
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
 
+    let mut enforcer = PolicyEnforcer::new()?;
+    let mut tx = db_pool.begin().await?;
+    enforcer.reload(&mut tx).await?;
+    drop(tx);
+
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppState {
                 db: db_pool.clone(),
+                enforcer: enforcer.clone()
             })
             .wrap(crate::auth::SessionAuth::new("feroauth", db_pool.clone()))
             .service(auth::validate_endpoint)

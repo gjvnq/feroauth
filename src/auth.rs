@@ -22,11 +22,11 @@ pub async fn validate_endpoint(
 }
 
 #[derive(Debug)]
-pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, &'static str);
+pub struct SessionAuth(Arc<sqlx::Pool<sqlx::MySql>>, PolicyEnforcer, &'static str);
 
 impl SessionAuth {
     pub fn new(cookie_name: &'static str, db_pool: Arc<sqlx::Pool<sqlx::MySql>>) -> Self {
-        SessionAuth(db_pool, cookie_name)
+        SessionAuth(db_pool, PolicyEnforcer::new().expect("PolicyEnforcer::new() should not fail"), cookie_name)
     }
 }
 
@@ -45,11 +45,13 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         let db_pool = self.0.clone();
-        let cookie_name = self.1.clone();
+        let enforcer = self.1.clone();
+        let cookie_name = self.2.clone();
         ok(SessionAuthMiddleware {
             service: Rc::new(RefCell::new(service)),
             db_pool,
             cookie_name,
+            enforcer
         })
     }
 }
@@ -59,6 +61,7 @@ pub struct SessionAuthMiddleware<S> {
     service: Rc<RefCell<S>>,
     cookie_name: &'static str,
     db_pool: Arc<sqlx::Pool<sqlx::MySql>>,
+    enforcer: PolicyEnforcer
 }
 
 impl<S> SessionAuthMiddleware<S> {
@@ -67,6 +70,7 @@ impl<S> SessionAuthMiddleware<S> {
             service: self.service.clone(),
             cookie_name: self.cookie_name.clone(),
             db_pool: self.db_pool.clone(),
+            enforcer: self.enforcer.clone(),
         }
     }
 
@@ -113,7 +117,7 @@ impl<S> SessionAuthMiddleware<S> {
             Some(v) => v,
             None => return,
         };
-        let session = match FullSession::safe_load_by_uuid(session_uuid, self.db_pool.clone()).await
+        let session = match FullSession::safe_load_by_uuid(session_uuid, &User::system_super_user(), &self.enforcer, self.db_pool.clone()).await
         {
             Ok(v) => v,
             Err(err) => {
