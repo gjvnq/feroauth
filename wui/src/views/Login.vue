@@ -154,6 +154,10 @@ export default {
 					console.log("Unexpected status: "+this.status)
 					console.log(response);
 				}
+			}).catch(err => {
+				this.waiting_api = false;
+				this.error_msg = 'Something went wrong.';
+				console.log(err);
 			});
 		}
 	}
