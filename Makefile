@@ -7,7 +7,7 @@ help:
 	@echo "- run"
 
 prepare:
-	rustup override set nightly
+	rustup override set stable
 	cargo install cargo-watch
 	cargo fetch
 

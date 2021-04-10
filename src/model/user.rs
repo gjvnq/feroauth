@@ -60,7 +60,6 @@ impl MinUser {
         }
     }
 
-    #[allow(unused)]
     pub async fn load_by_login_handle(
         login_handle: &str,
         tx: &mut Transaction<'_>,

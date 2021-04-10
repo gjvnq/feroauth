@@ -1,14 +1,14 @@
 use crate::model::password::PasswordCheck;
 use crate::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct LoginRequest {
-    username: Option<String>,
-    password: Option<String>,
-    code_otp: Option<String>,
-    code_u2f: Option<String>,
-    selection_2fa: Option<String>,
-    remember_me: Option<bool>,
+    username: String,
+    password: String,
+    code_otp: String,
+    code_u2f: String,
+    selection_2fa: String,
+    remember_me: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,23 +52,21 @@ async fn login_endpoint(
         Utc::now().timestamp_millis() - time_start,
         info
     );
-    let username = match &info.username {
-        Some(v) => v,
-        _ => {
-            return Ok(
-                HttpResponse::Ok().json(LoginResponse::new(LoginResponseStatus::MissingUsername))
-            )
-        }
-    };
+    if info.username.len() == 0 {
+        return Ok(
+            HttpResponse::Ok().json(LoginResponse::new(LoginResponseStatus::MissingUsername))
+        )
+    }
     debug!(
         "{} - Got username",
         Utc::now().timestamp_millis() - time_start
     );
 
     let mut tx = data.db.begin().await.unwrap();
-    let user = match MinUser::load_by_login_handle(username, &mut tx).await {
+    let user = match MinUser::load_by_login_handle(&info.username, &mut tx).await {
         Ok(v) => v,
         Err(err) => {
+            debug!("{:?}", err);
             if err.is_not_found() {
                 return Ok(
                     HttpResponse::Ok().json(LoginResponse::new(LoginResponseStatus::UserNotFound))
@@ -84,18 +82,15 @@ async fn login_endpoint(
         status: LoginResponseStatus::MissingPassword,
         user: Some(user.clone()),
     };
-    let password = match &info.password {
-        Some(v) => v,
-        _ => {
+    if info.password.len() == 0 {
             ans.status = LoginResponseStatus::MissingPassword;
             return Ok(HttpResponse::Ok().json(ans));
-        }
-    };
+    }
     debug!(
         "{} - Got password",
         Utc::now().timestamp_millis() - time_start
     );
-    match Password::verify_for_user(user.get_uuid(), password, &mut tx).await? {
+    match Password::verify_for_user(user.get_uuid(), &info.password, &mut tx).await? {
         PasswordCheck::WrongPassword => {
             debug!(
                 "{} - Finished login for {:?}",
@@ -119,7 +114,7 @@ async fn login_endpoint(
 
     if ans.status == LoginResponseStatus::LoggedIn {
         let (ip_addr_real, ip_addr_peer) = get_ip(&req);
-        let remember_me = info.remember_me.unwrap_or(false);
+        let remember_me = info.remember_me;
         let user = User::load_by_uuid(user.get_uuid(), &User::system_super_user(), &data.enforcer, &mut tx).await?;
         let session = FullSession::new(
             &user,

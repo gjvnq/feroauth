@@ -9,6 +9,7 @@ categories = ["authentication", "web-programming"]
 
 [dependencies]
 actix-web = { version = "3", features = ["secure-cookies", "compress", "openssl"] }
+actix-cors = "0.5.4"
 cookie = { version = "0.14", features = ["secure", "percent-encode"] }
 argonautica = { version = "0.2", features = ["serde"] }
 tokio = { version = "0.2.24", features = ["full"] }

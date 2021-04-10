@@ -12,6 +12,8 @@ extern crate serde_json;
 use crate::prelude::*;
 
 use actix_web::{App, HttpServer};
+use actix_web::http::header;
+use actix_cors::Cors;
 use dotenv::dotenv;
 use std::env;
 
@@ -25,6 +27,8 @@ async fn main() -> FResult<()> {
     let db_pass = env::var("DB_PASS").expect("DB_PASS is not set in .env file");
     let db_name = env::var("DB_NAME").expect("DB_NAME is not set in .env file");
     let db_pool = model::db::get_pool(&db_host, &db_user, &db_pass, &db_name).await;
+    let origin = env::var("ORIGIN").expect("ORIGIN is not set in .env file");
+    info!("Allowing ORIGIN: {}", origin);
 
     let mut enforcer = PolicyEnforcer::new()?;
     let mut tx = db_pool.begin().await?;
@@ -32,7 +36,14 @@ async fn main() -> FResult<()> {
     drop(tx);
 
     let mut server = HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin(&origin)
+            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
+            .allow_any_method() 
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .data(AppState {
                 db: db_pool.clone(),
                 enforcer: enforcer.clone()
