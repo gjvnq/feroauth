@@ -692,7 +692,7 @@ SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 -- Data for table `user`
 -- -----------------------------------------------------
 START TRANSACTION;
-INSERT INTO `user` (`uuid`, `_revision`, `superuser`, `display_name`, `added`, `last_login`) VALUES (0xD6FCB336EE52416D9AA04A0F7D59612C, 1, 1, 'Super Admin', 'NOW()', NULL);
+INSERT INTO `user` (`uuid`, `_revision`, `superuser`, `display_name`, `added`, `last_login`) VALUES (0xD6FCB336EE52416D9AA04A0F7D59612C, 1, 1, 'Super Admin', NOW(), NULL);
 
 COMMIT;
 
@@ -701,7 +701,7 @@ COMMIT;
 -- Data for table `login_handle`
 -- -----------------------------------------------------
 START TRANSACTION;
-INSERT INTO `login_handle` (`login_handle`, `user_uuid`, `kind`, `added`) VALUES ('admin', 0xD6FCB336EE52416D9AA04A0F7D59612C, 'OTHER', 'NOW()');
+INSERT INTO `login_handle` (`login_handle`, `user_uuid`, `kind`, `added`) VALUES ('admin', 0xD6FCB336EE52416D9AA04A0F7D59612C, 'OTHER', NOW());
 
 COMMIT;
 
