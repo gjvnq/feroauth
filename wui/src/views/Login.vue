@@ -12,6 +12,7 @@
 					id="input-username"
 					type="text"
 					v-model="username"
+					@input="clearUsernameFeedback"
 					:state="stateUsername"
 					:disabled="disableUsername"
 					aria-describedby="input-username-help input-username-feedback"
@@ -32,6 +33,7 @@
 					id="input-password"
 					type="password"
 					v-model="password"
+					@input="clearPasswordFeedback"
 					:state="statePassword"
 					:disabled="disablePassword"
 					aria-describedby="input-password-help input-password-feedback"
@@ -127,6 +129,12 @@ export default {
 			this.success_msg = '';
 			this.error_msg = '';
 			this.usernameFeedback = '';
+			this.passwordFeedback = '';
+		},
+		clearUsernameFeedback() {
+			this.usernameFeedback = '';
+		},
+		clearPasswordFeedback() {
 			this.passwordFeedback = '';
 		},
 		onSubmit(event) {
