@@ -1,12 +1,12 @@
 <template>
 	<div id="login-root">
-		<b-form @submit="onSubmit">
-			<h1>Feroauth Login</h1>
+		<h1>{{ $t('message.login_title') }}</h1>
+		<b-form @submit="onSubmit" v-if="status !== 'LoggedIn'">
 			<b-alert variant="success" :show="showSuccessBadge">{{ success_msg }}</b-alert>
 			<b-alert variant="danger" :show="showErrorBadge">{{ error_msg }}</b-alert>
 			<b-form-group
 				id="input-group-username"
-				label="Login handle"
+				:label="$t('message.login_handle')"
 				label-for="input-username">
 				<b-form-input
 					id="input-username"
@@ -17,16 +17,16 @@
 					aria-describedby="input-username-help input-username-feedback"
 					required></b-form-input>
 				<b-form-invalid-feedback id="input-username-feedback">
-					{{ username_feedback }}
+					{{ usernameFeedback }}
 				</b-form-invalid-feedback>
-				<b-form-text id="input-username-feedback">
-					{{ username_desc }}
+				<b-form-text id="input-username-help">
+					{{ realUsernameHelp }}
 				</b-form-text>
 			</b-form-group>
 			<b-form-group
 				v-if="showPassword"
 				id="input-group-password"
-				label="Password"
+				:label="$t('message.password')"
 				label-for="input-password">
 				<b-form-input
 					id="input-password"
@@ -38,21 +38,24 @@
 					required
 					></b-form-input>
 				<b-form-invalid-feedback id="input-password-feedback">
-					{{ password_feedback }}
+					{{ passwordFeedback }}
 				</b-form-invalid-feedback>
-				<b-form-text id="input-password-feedback">
-					{{ password_desc }}
+				<b-form-text id="input-password-help">
+					{{ passwordHelp }}
 				</b-form-text>
 			</b-form-group>
 			<div align="center">
-				<b-button type="submit" variant="primary" :disabled="waiting_api">Next</b-button>
+				<b-button type="submit" variant="primary" :disabled="waiting_api" v-if="!waiting_api">{{ $t('message.next') }} <b-icon icon="arrow-right"></b-icon></b-button>
+				<b-spinner variant="primary" label="Loading..." v-if="waiting_api"></b-spinner>
 			</div>
 		</b-form>
+		<p v-if="status === 'LoggedIn'">{{ $t('message.hello_name', {name: this.userDisplayName}) }}</p>
 	</div>
 </template>
 
 <script>
 import axios from "axios";
+import globals from "@/globals.js"
 
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
@@ -67,8 +70,9 @@ export default {
 			success_msg: '',
 			error_msg: '',
 			status: 'MissingUsername',
-			username_feedback: '',
-			password_feedback: '',
+			usernameFeedback: '',
+			passwordFeedback: '',
+			userDisplayName: '',
 			waiting_api: false
 		}
 	},
@@ -89,34 +93,44 @@ export default {
 			return this.status == 'MissingPassword' || this.status == 'WrongPassword'
 		},
 		stateUsername: function() {
-			if (this.username_feedback.length !== 0) {
+			if (this.usernameFeedback.length !== 0) {
 				return false;
 			}
 			return null;
 		},
 		statePassword: function() {
-			if (this.password_feedback.length !== 0) {
+			if (this.passwordFeedback.length !== 0) {
 				return false;
 			}
 			return null;
+		},
+		realUsernameHelp: function() {
+			if (this.usernameHelp.length !== 0) {
+				return this.usernameHelp;
+			} else {
+				return this.$t('message.default_login_handle_help');
+			}
 		}
 	},
 	props: {
-		username_desc: {
+		usernameHelp: {
 			type: String,
-			default: 'Email address or username'
+			default: ''
+		},
+		passwordHelp: {
+			type: String,
+			default: ''
 		}
 	},
 	methods: {
 		clear() {
 			this.success_msg = '';
 			this.error_msg = '';
-			this.username_feedback = '';
-			this.password_feedback = '';
+			this.usernameFeedback = '';
+			this.passwordFeedback = '';
 		},
 		onSubmit(event) {
 			event.preventDefault();
-			console.log(this);
 			let reqData = {
 				username: this.username,
 				password: this.password,
@@ -136,28 +150,28 @@ export default {
 				if (this.status === "MissingUsername") {
 					// no need to handle this
 				} else if (this.status === "UserNotFound") {
-					this.username_feedback = 'User not found';
+					this.usernameFeedback = this.$t('message.no_such_user');
 					console.log(response);
 				} else if (this.status === "MissingPassword") {
 					// no need to handle this
 				} else if (this.status === "WrongPassword") {
-					this.password_feedback = 'Wrong password';
+					this.passwordFeedback = this.$t('message.wrong_password');
 					console.log(response);
 				} else if (this.status === "Select2FA") {
 					this.error_msg = 'Not implemented: '+this.status;
 				} else if (this.status === "Wrong2FA") {
 					this.error_msg = 'Not implemented: '+this.status;
 				} else if (this.status === "LoggedIn") {
-					this.success_msg = 'Successfully logged in as '+response.data.user.display_name+'.';
+					this.userDisplayName = response.data.user.display_name;
 				} else  {
 					this.error_msg = 'Something went wrong.';
 					console.log("Unexpected status: "+this.status)
 					console.log(response);
 				}
 			}).catch(err => {
-				this.waiting_api = false;
-				this.error_msg = 'Something went wrong.';
 				console.log(err);
+				this.waiting_api = false;
+				this.error_msg = globals.axios_error_to_string(this, err);
 			});
 		}
 	}
