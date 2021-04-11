@@ -28,7 +28,7 @@ const messages = {
 			login_handle: 'Alça de Login',
 			next: 'Próximo',
 			password: 'Senha',
-			no_such_user: 'Tal usuário não existe.',
+			no_such_user: 'Tal usuário inexiste.',
 			wrong_password: 'Senha incorreta.',
 			hello_name: 'Olá {name}!',
 			generic_error: 'Algo deu errado.',
@@ -37,7 +37,7 @@ const messages = {
 			err_http_403: 'Você não tem permissão para isso.',
 			err_http_500: 'Algo deu errado dentro no servidor.',
 			err_http_other: 'Algo deu errado. Código de erro HTTP: {code}.',
-			default_login_handle_help: 'Email ou nome de usuário ou UUID de usuário'
+			default_login_handle_help: 'Email ou nome de usuário ou UUID do usuário'
 		}
 	}
 };
