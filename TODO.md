@@ -1,8 +1,9 @@
 # Short Term
-- [ ] Hide all internal fields to make permission cheking easier
-- [ ] Implement `_revision`
+- [ ] Hide all internal fields to make permission cheking easier.
+- [ ] Switch from cookies to auth tokens to allow multiple current users. (tokens carry session id + signature)
+- [X] Implement `_revision`
 
 # Long Term
 
-- [ ] Consider the application in use when processing permission requests
+- [ ] Use the application and user as the actor when processing permissions.
 - [ ] User data takeout.
