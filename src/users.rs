@@ -146,8 +146,6 @@ async fn get_user_endpoint(
     auth: FullSession,
     path: web::Path<String>,
 ) -> FResult<HttpResponse> {
-    // TODO: check permission
-
     let mut tx = data.db.begin().await.unwrap();
     let user = User::load_by_login_handle(&path, auth.get_user(), &data.enforcer, &mut tx).await?;
 
@@ -161,8 +159,6 @@ async fn put_user_endpoint(
     info: web::Json<UserChange>,
     path: web::Path<String>,
 ) -> FResult<HttpResponse> {
-    // TODO: check permission
-
     let mut tx = data.db.begin().await.unwrap();
     let handle = path.as_str();
     let mut user = match handle {

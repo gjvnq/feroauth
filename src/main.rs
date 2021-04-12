@@ -38,9 +38,9 @@ async fn main() -> FResult<()> {
     let mut server = HttpServer::new(move || {
         let cors = Cors::default()
             .allowed_origin(&origin)
-            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
-            .allow_any_method() 
-            .max_age(3600);
+            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE, header::COOKIE])
+            .allow_any_method()
+            .max_age(30);
 
         App::new()
             .wrap(cors)
@@ -53,6 +53,7 @@ async fn main() -> FResult<()> {
             .service(users::login_endpoint)
             .service(users::get_user_endpoint)
             .service(users::put_user_endpoint)
+            .service(misc::get_session_info_endpoint)
     });
 
     let host = env::var("HOST").expect("HOST is not set in .env file");
