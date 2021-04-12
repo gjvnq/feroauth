@@ -1,7 +1,7 @@
 <template>
 	<div id="login-root">
 		<h1>{{ $t('message.login_title') }}</h1>
-		<b-form @submit="onSubmit" v-if="status !== 'LoggedIn'">
+		<b-form @submit="onSubmit" method="GET" v-if="status !== 'LoggedIn'">
 			<b-alert variant="success" :show="showSuccessBadge">{{ success_msg }}</b-alert>
 			<b-alert variant="danger" :show="showErrorBadge">{{ error_msg }}</b-alert>
 			<b-form-group
@@ -46,7 +46,14 @@
 					{{ passwordHelp }}
 				</b-form-text>
 			</b-form-group>
-			<div align="center">
+			<b-form-checkbox
+				id="input-remember-me"
+				v-model="rememberMe"
+				name="input-remember-me"
+				:disabled="disableRememberMe">
+				{{ $t('message.remember_me_desc') }}
+			</b-form-checkbox>
+			<div id="next-btn-div" align="center">
 				<b-button type="submit" variant="primary" :disabled="waiting_api" v-if="!waiting_api">{{ $t('message.next') }} <b-icon icon="arrow-right"></b-icon></b-button>
 				<b-spinner variant="primary" label="Loading..." v-if="waiting_api"></b-spinner>
 			</div>
@@ -56,8 +63,8 @@
 </template>
 
 <script>
-import axios from "axios";
-import globals from "@/globals.js"
+import axios from 'axios';
+import globals from '@/globals.js'
 
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
@@ -75,6 +82,7 @@ export default {
 			usernameFeedback: '',
 			passwordFeedback: '',
 			userDisplayName: '',
+			rememberMe: false,
 			waiting_api: false
 		}
 	},
@@ -89,6 +97,9 @@ export default {
 			return this.waiting_api || (this.status !== 'MissingUsername' && this.status !== 'UserNotFound')
 		},
 		disablePassword: function() {
+			return this.waiting_api
+		},
+		disableRememberMe: function() {
 			return this.waiting_api
 		},
 		showPassword: function() {
@@ -137,6 +148,10 @@ export default {
 		clearPasswordFeedback() {
 			this.passwordFeedback = '';
 		},
+		afterLoggedIn() {
+			console.log(this.$store);
+			this.$store.dispatch('session/loadFromServer');
+		},
 		onSubmit(event) {
 			event.preventDefault();
 			let reqData = {
@@ -145,35 +160,35 @@ export default {
 				code_otp: '',
 				code_u2f: '',
 				selection_2fa: '',
-				remember_me: false
+				remember_me: this.rememberMe
 			};
-			let endpoint = process.env.VUE_APP_API_ADDR;
 			this.clear();
 			
 			this.waiting_api = true;
-			axios.post(endpoint+"/login", reqData).then(response => {
+			axios.post('/api/login', reqData).then(response => {
 				this.waiting_api = false;
 				this.status = response.data.status;
 
-				if (this.status === "MissingUsername") {
+				if (this.status === 'MissingUsername') {
 					// no need to handle this
-				} else if (this.status === "UserNotFound") {
+				} else if (this.status === 'UserNotFound') {
 					this.usernameFeedback = this.$t('message.no_such_user');
 					console.log(response);
-				} else if (this.status === "MissingPassword") {
+				} else if (this.status === 'MissingPassword') {
 					// no need to handle this
-				} else if (this.status === "WrongPassword") {
+				} else if (this.status === 'WrongPassword') {
 					this.passwordFeedback = this.$t('message.wrong_password');
 					console.log(response);
-				} else if (this.status === "Select2FA") {
+				} else if (this.status === 'Select2FA') {
 					this.error_msg = 'Not implemented: '+this.status;
-				} else if (this.status === "Wrong2FA") {
+				} else if (this.status === 'Wrong2FA') {
 					this.error_msg = 'Not implemented: '+this.status;
-				} else if (this.status === "LoggedIn") {
+				} else if (this.status === 'LoggedIn') {
 					this.userDisplayName = response.data.user.display_name;
+					this.afterLoggedIn();
 				} else  {
 					this.error_msg = 'Something went wrong.';
-					console.log("Unexpected status: "+this.status)
+					console.log('Unexpected status: '+this.status)
 					console.log(response);
 				}
 			}).catch(err => {
@@ -186,12 +201,15 @@ export default {
 }
 </script>
 
-<style lang="scss" scoped>
+<style lang='scss' scoped>
 @import '@/global-style.scss';
 #login-root {
 	background-color: $gray-200;
 	border-radius: 0.5rem;
 	width: 30rem;
 	padding: 1rem;
+}
+#next-btn-div {
+	margin-top: 1rem;
 }
 </style>
