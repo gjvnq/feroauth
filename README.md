@@ -7,7 +7,6 @@ A "common base" for Web Apps.
     * Logins (TOTP, U2F, mTLS, PGP)
     * Account Recovery
     * Groups
-    * Permission policy
     * Audit logins
   * Logs & Audit
     * Timestamp logs
@@ -17,6 +16,10 @@ A "common base" for Web Apps.
   * Configuration
     * Database credentials
     * Storing other config info
+
+## Features for a future version (long time away)
+
+  * Doing permissions for apps. (i.e. doesn't fill the role of something like [OPA - Open Policy Agent](www.openpolicyagent.org))
 
 ## Quirks
 
